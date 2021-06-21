@@ -11,7 +11,7 @@ setuptools.setup(
     description="This code can handle the level-2 tile products of the GCOM-C satellite datasets.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Shima-shoki/GcomcTool",
+    url="https://github.com/Shima-shoki/GcomcTool.git",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
