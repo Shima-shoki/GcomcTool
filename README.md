@@ -1,6 +1,11 @@
 # GcomcTool
 This module was developed to make the GCOM-C data processing easy.
 
+Installation
+```
+pip install git+https://github.com/Shima-shoki/GcomcTool
+```
+
 It can do the following jobs:<br>
 1.Reprojection of the original EQA hdf5 data to the WGS84 lat/lon GeoTIFF data.<br>
 2.Query and download GCOM-C data in an automated way.<br>
