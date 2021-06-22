@@ -6,7 +6,7 @@ Installation
 pip install git+https://github.com/Shima-shoki/GcomcTool
 ```
 
-It can do the following jobs:<br>
+It can do the following jobs on the GCOM-C level-2 tile products:<br>
 1.Reprojection of the original EQA hdf5 data to the WGS84 lat/lon GeoTIFF data.<br>
 2.Query and download GCOM-C data in an automated way.<br>
 3.Visualization of the target areas.<br>
