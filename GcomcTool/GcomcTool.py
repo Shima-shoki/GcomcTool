@@ -4,6 +4,8 @@ from datetime import datetime as dt
 from datetime import timedelta
 from glob import glob
 
+!pip install gdal==3.2.2
+
 import h5py
 import json
 import pycrs
