@@ -488,6 +488,11 @@ class GcomCpy:
                            dstSRS='EPSG:4326',
                            tps=True,
                            outputType=dtype)
+        
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(4326)
+        output.SetProjection(srs.ExportToWkt())
+        
         output = None
 
     def boundary_box(self, box_coordinates=None):
