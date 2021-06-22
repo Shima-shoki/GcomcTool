@@ -25,7 +25,7 @@ from shapely.geometry import box, Polygon
 
 class GcomCpy:
     def __init__(self):
-        print('This progdam was tested under the GDAL 3.2.2.')
+        print('This program was tested under the GDAL 3.2.2.')
 
     def get_meta(self, file_path, sub_dataset):
         self.file_path = file_path
