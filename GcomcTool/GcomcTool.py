@@ -338,28 +338,30 @@ class GcomCpy:
         date_list = list(set(date_list))
 
         mosaic_images = self.mosaic_images
-        for date in date_list:
-            files = glob(download_path + f"/{folder_name}/*{date}*")
-            mosaic, out_trans, opened_files = mosaic_images(files)
-
-            with rasterio.open(download_path + f"/{folder_name}/" +
-                               f"{sub_dataset}_{date}_mosaic.tif",
-                               'w',
-                               driver='GTiff',
-                               width=mosaic[0].shape[1],
-                               height=mosaic[0].shape[0],
-                               count=1,
-                               crs='EPSG:4326',
-                               transform=out_trans,
-                               dtype=mosaic[0].dtype) as output:
-                output.write(mosaic[0], 1)
-                output.close()
-
-            for file in opened_files:
-                file.close()
-
-            for file in files:
-                os.remove(file)
+        
+        if clip==True:
+            for date in date_list:
+                files = glob(download_path + f"/{folder_name}/*{date}*")
+                mosaic, out_trans, opened_files = mosaic_images(files)
+                with rasterio.open(download_path + f"/{folder_name}/" +
+                                   f"{sub_dataset}_{date}_mosaic.tif",
+                                   'w',
+                                   driver='GTiff',
+                                   width=mosaic[0].shape[1],
+                                   height=mosaic[0].shape[0],
+                                   count=1,
+                                   crs='EPSG:4326',
+                                   transform=out_trans,
+                                   dtype=mosaic[0].dtype) as output:
+                    output.write(mosaic[0], 1)
+                    output.close()
+                
+                for file in opened_files:
+                    file.close()
+                for file in files:
+                    os.remove(file)
+        else:
+            pass
 
     def clean_up(self):
         downloaded_products = self.downloaded_products
