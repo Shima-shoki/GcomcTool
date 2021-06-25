@@ -937,7 +937,7 @@ class GcomCpy:
     def global_eqa(self, file_path, subdataset, output_path):
         opened = gdal.Open(file_path)
         error_dn = int(
-            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
+            float(opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN']))
         slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
         offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
 
@@ -985,7 +985,7 @@ class GcomCpy:
     def global_eqr(self, file_path, subdataset, output_path):
         opened = gdal.Open(file_path)
         error_dn = int(
-            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
+            float(opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN']))
         slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
         offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
 
@@ -1024,7 +1024,7 @@ class GcomCpy:
     def global_eqa_1dim(self, file_path, subdataset, output_path):
         opened_gdal = gdal.Open(file_path)
         error_dn = int(
-            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
+            float(opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Error_DN']))
         slope = float(
             opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Slope'])
         offset = float(
