@@ -960,8 +960,12 @@ class GcomCpy:
     def polar_stereo(self, file_path, subdataset, output_path):
         opened = gdal.Open(file_path)
         error_dn = 65535
-        slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
-        offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
+        try:
+            slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
+            offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
+        except:
+            slope=1
+            offset=0
 
         for i in range(len(opened.GetSubDatasets())):
             if subdataset in opened.GetSubDatasets()[i][0]:
