@@ -937,7 +937,7 @@ class GcomCpy:
     def global_eqa(self, file_path, subdataset, output_path):
         opened = gdal.Open(file_path)
         error_dn = int(
-            float(opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
         slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
         offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
 
@@ -959,13 +959,10 @@ class GcomCpy:
 
     def polar_stereo(self, file_path, subdataset, output_path):
         opened = gdal.Open(file_path)
-        error_dn = 65535
-        try:
-            slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace('d ',''))
-            offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'].replace('d ',''))
-        except:
-            slope=1
-            offset=0
+        error_dn = int(
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
+        slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace('d ',''))
+        offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'].replace('d ',''))
 
         for i in range(len(opened.GetSubDatasets())):
             if subdataset in opened.GetSubDatasets()[i][0]:
@@ -984,10 +981,13 @@ class GcomCpy:
 
     def global_eqr(self, file_path, subdataset, output_path):
         opened = gdal.Open(file_path)
+        
+        print(opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
+        print(opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
         error_dn = int(
-            float(opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ','')))
-        slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
-        offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
+        slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace('d ',''))
+        offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'].replace('d ',''))
 
         for i in range(len(opened.GetSubDatasets())):
             if subdataset in opened.GetSubDatasets()[i][0]:
@@ -1024,11 +1024,11 @@ class GcomCpy:
     def global_eqa_1dim(self, file_path, subdataset, output_path):
         opened_gdal = gdal.Open(file_path)
         error_dn = int(
-            float(opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ','')))
+            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
         slope = float(
-            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Slope'])
+            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace('d ',''))
         offset = float(
-            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Offset'])
+            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Offset'].replace('d ',''))
 
         opened = h5py.File(file_path)
         opened_vector = opened['Image_data'][subdataset][()]
@@ -1049,10 +1049,17 @@ class GcomCpy:
         containor = 0
         for i in tqdm(range(nrow)):
             bins = num_bin_calculator(i + 1, 1 / 24, nrow)
-            ith_row_values = opened_vector[int(containor):int(containor +bins)]
-            ith_row_values_E = opened_vector[int(containor):int(containor +(bins / 2 +bins % 2))]
-            ith_row_values_W = opened_vector[int(containor + bins / 2 +bins % 2):int(containor +bins)]
-            output_E[i:i + 1,int(ncol / 2 -len(ith_row_values_E)):ncol] = ith_row_values_E
+            ith_row_values = opened_vector[int(containor):int(containor +
+                                                              bins)]
+            ith_row_values_E = opened_vector[int(containor):int(containor +
+                                                                (bins / 2 +
+                                                                 bins % 2))]
+            ith_row_values_W = opened_vector[int(containor + bins / 2 +
+                                                 bins % 2):int(containor +
+                                                               bins)]
+            output_E[i:i + 1,
+                     int(ncol / 2 -
+                         len(ith_row_values_E)):ncol] = ith_row_values_E
             output_W[i:i + 1, 0:len(ith_row_values_W)] = ith_row_values_W
             containor = containor + bins
 
