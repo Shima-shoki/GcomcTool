@@ -982,8 +982,6 @@ class GcomCpy:
     def global_eqr(self, file_path, subdataset, output_path):
         opened = gdal.Open(file_path)
         
-        print(opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
-        print(opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
         error_dn = int(
             opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
         slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace('d ',''))
