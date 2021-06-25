@@ -1,5 +1,6 @@
 import os
 import time
+import warnings
 from datetime import datetime as dt
 from datetime import timedelta
 from glob import glob
@@ -22,6 +23,8 @@ from rasterio.merge import merge
 from rasterio.plot import show
 from shapely.geometry import box, Polygon
 
+warnings.simplefilter('ignore', RuntimeWarning)
+
 
 class GcomCpy:
     def __init__(self):
@@ -35,9 +38,9 @@ class GcomCpy:
         )['Global_attributes_Product_file_name']
         granule_ID = self.file_name.replace(".h5", "")
         slope = float(file.GetMetadata()["Image_data_" + self.sub_dataset +
-                                          "_Slope"])
+                                         "_Slope"])
         offset = float(file.GetMetadata()["Image_data_" + self.sub_dataset +
-                                           "_Offset"])
+                                          "_Offset"])
         vtile = int(self.file_name[21:23])
         htile = int(self.file_name[23:25])
         resolution = self.file_name[-9]
@@ -182,16 +185,16 @@ class GcomCpy:
 
         return tile
 
-    def filter_products(self,
-                        product_name,
-                        date_start,
-                        date_end,
-                        user_name,
-                        orbit="D",
-                        product_type="LAND",
-                        statistics=True,
-                        period="08D",
-                        version=2):
+    def filter_products_tile(self,
+                             product_name,
+                             date_start,
+                             date_end,
+                             user_name,
+                             orbit="D",
+                             product_type="LAND",
+                             statistics=True,
+                             period="08D",
+                             version=2):
         tile_num_vv = self.tile_num_vv
         tile_num_hh = self.tile_num_hh
         tile_calculator = self.tile_calculator
@@ -253,6 +256,64 @@ class GcomCpy:
 
         self.target_products = target_products
 
+    def filter_products_global(self,
+                               product_name,
+                               date_start,
+                               date_end,
+                               user_name,
+                               orbit="D",
+                               product_type="ATMOS",
+                               level=2,
+                               version=2,
+                               projection="D",
+                               period="01M"):
+
+        strdt = dt.strptime(date_start, '%Y-%m-%d')
+        enddt = dt.strptime(date_end, '%Y-%m-%d')
+        strdt = dt.strptime(date_start, '%Y-%m-%d')
+        enddt = dt.strptime(date_end, '%Y-%m-%d')
+        days_num = (enddt - strdt).days + 1
+        date_list = []
+        for i in range(days_num):
+            date = (strdt + timedelta(days=i)).strftime("%Y-%m-%d")
+            date = date.replace("-", "")
+            date_list.append(date)
+
+        ftp = FTP('ftp.gportal.jaxa.jp', user_name, 'anonymous')
+        self.ftp = ftp
+
+        print('Filtering process has started...')
+
+        if level == 2:
+            target_products = []
+            for date in date_list:
+                y = date[:4]
+                m = date[4:6]
+                d = date[6:8]
+                try:
+                    item = ftp.nlst(
+                        f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Global/{version}/{y}/{m}/*{date}{orbit}*"
+                    )
+                    print(item)
+                    target_products.extend(item)
+                except:
+                    pass
+        else:
+            target_products = []
+            for date in date_list:
+                y = date[:4]
+                m = date[4:6]
+                d = date[6:8]
+                try:
+                    item = ftp.nlst(
+                        f"/standard/GCOM-C/GCOM-C.SGLI/L3.{product_type}.{product_name}/{version}/{y}/{m}/*{date}{orbit}{period}*{projection}0000*"
+                    )
+                    print(item)
+                    target_products.extend(item)
+                except:
+                    pass
+        self.target_products = target_products
+
     def get_products(self, download_path):
         self.download_path = download_path
 
@@ -268,10 +329,14 @@ class GcomCpy:
         self.downloaded_products = downloaded_products
         ftp.close()
 
-    def show_subdatasets(self):
-        download_path = self.download_path
-        downloaded_products = self.downloaded_products
-        first = downloaded_products[0].replace("\\", "/")
+    def show_subdatasets(self, batch=True, path_to_product=None):
+        if batch == True:
+            download_path = self.download_path
+            downloaded_products = self.downloaded_products
+            first = downloaded_products[0].replace("\\", "/")
+        else:
+            first = path_to_product
+
         with h5py.File(first) as opened:
             print(opened['Image_data'].keys())
 
@@ -338,8 +403,8 @@ class GcomCpy:
         date_list = list(set(date_list))
 
         mosaic_images = self.mosaic_images
-        
-        if clip==True:
+
+        if clip == True:
             for date in date_list:
                 files = glob(download_path + f"/{folder_name}/*{date}*")
                 mosaic, out_trans, opened_files = mosaic_images(files)
@@ -355,11 +420,121 @@ class GcomCpy:
                                    dtype=mosaic[0].dtype) as output:
                     output.write(mosaic[0], 1)
                     output.close()
-                
+
                 for file in opened_files:
                     file.close()
                 for file in files:
                     os.remove(file)
+        else:
+            pass
+
+    def reproject_all_global(self,
+                             sub_dataset,
+                             folder_name="reprojectedFiles",
+                             temporal_merge=True,
+                             merge_method='mean',
+                             merge_image_name='merged_by_'):
+
+        download_path = self.download_path
+        downloaded_products = self.downloaded_products
+        projection = downloaded_products[0][-24]
+        os.mkdir(download_path + f"/{folder_name}/")
+
+        flag = 0
+
+        if projection == "D":
+            reprojection_function = self.global_eqr
+            flag = 1
+        elif projection == "X":
+            reprojection_function = self.global_eqa_1dim
+        elif projection == "A":
+            reprojection_function = self.global_eqa
+        elif projection == "N":
+            reprojection_function = self.polar_stereo
+        elif projection == "S":
+            reprojection_function = self.polar_stereo
+        else:
+            pass
+
+        output_file_path_list = []
+
+        for file_path in downloaded_products:
+            file_path = file_path.replace("\\", "/")
+            file_name = file_path[-37:]
+            output_path = download_path + f"/{folder_name}/" + file_name.replace(
+                ".h5", ".tif")
+            reprojection_function(file_path, sub_dataset, output_path)
+            output_file_path_list.append(output_path)
+
+        if temporal_merge == True:
+            if flag == 0:
+                file_list = glob(download_path + f"/{folder_name}/*")
+                with rasterio.open(file_list[0]) as opened:
+                    shape = opened.read(1).shape
+                opened_array_list = []
+                for file in file_list:
+                    with rasterio.open(file) as opened:
+                        opened_array = opened.read(1).flatten()
+                        opened_array_list.append(opened_array)
+
+                if merge_method == 'mean':
+                    output_array = np.nanmean(opened_array_list, axis=0)
+                elif merge_method == 'max':
+                    output_array = np.nanmax(opened_array_list, axis=0)
+                elif merge_method == 'min':
+                    output_array = np.nanmin(opened_array_list, axis=0)
+                else:
+                    print(
+                        'The available merging methods are mean, max, or min.')
+
+                output_array = output_array.reshape(shape)
+                image = Image.fromarray(output_array)
+                image.save(
+                    download_path +
+                    f"/{folder_name}/{merge_image_name}{merge_method}.tif")
+
+            else:
+                file_list = glob(download_path + f"/{folder_name}/*")
+                with rasterio.open(file_list[0]) as opened:
+                    ref = opened
+                    shape = opened.read(1).shape
+                opened_array_list = []
+                for file in file_list:
+                    with rasterio.open(file) as opened:
+                        opened_array = opened.read(1).flatten()
+                        opened_array_list.append(opened_array)
+
+                if merge_method == 'mean':
+                    output_array = np.nanmean(opened_array_list, axis=0)
+                elif merge_method == 'max':
+                    output_array = np.nanmax(opened_array_list, axis=0)
+                elif merge_method == 'min':
+                    output_array = np.nanmin(opened_array_list, axis=0)
+                else:
+                    print(
+                        'The available merging methods are mean, max, or min.')
+                output_array = output_array.reshape(shape)
+
+                with rasterio.open(
+                        download_path +
+                        f"/{folder_name}/{merge_image_name}{merge_method}.tif",
+                        'w',
+                        driver='GTiff',
+                        width=output_array.shape[1],
+                        height=output_array.shape[0],
+                        count=1,
+                        crs='EPSG:4326',
+                        transform=ref.transform,
+                        dtype=output_array.dtype) as output:
+                    output.write(output_array, 1)
+                    output.close()
+            for file in output_file_path_list:
+                try:
+                    os.remove(file)
+                except:
+                    time.sleep(3)
+                    os.remove(file)
+
         else:
             pass
 
@@ -490,11 +665,122 @@ class GcomCpy:
                            dstSRS='EPSG:4326',
                            tps=True,
                            outputType=dtype)
-        
+
         srs = osr.SpatialReference()
         srs.ImportFromEPSG(4326)
         output.SetProjection(srs.ExportToWkt())
-        
+
+        output = None
+
+    def reprojection_scene(self,
+                           file_path,
+                           subdataset,
+                           output_path,
+                           interval=80):
+        opened = gdal.Open(file_path)
+
+        for i in range(len(opened.GetSubDatasets())):
+            if 'Longitude' in opened.GetSubDatasets()[i][0]:
+                lon_array = gdal.Open(
+                    opened.GetSubDatasets()[i][0]).ReadAsArray()
+            else:
+                pass
+
+        for i in range(len(opened.GetSubDatasets())):
+            if 'Latitude' in opened.GetSubDatasets()[i][0]:
+                lat_array = gdal.Open(
+                    opened.GetSubDatasets()[i][0]).ReadAsArray()
+            else:
+                pass
+
+        for i in range(len(opened.GetSubDatasets())):
+            if subdataset in opened.GetSubDatasets()[i][0]:
+                image_array = gdal.Open(
+                    opened.GetSubDatasets()[i][0]).ReadAsArray().astype(
+                        np.float)
+            else:
+                pass
+
+        error_dn = int(
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
+        try:
+            slope = float(
+                opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
+            offset = float(
+                opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
+        except:
+            pass
+
+        image_array[image_array == error_dn] = np.nan
+
+        try:
+            phys_value_array = slope * image_array + offset
+        except:
+            phys_value_array = image_array
+
+        gcp = []
+
+        nspace = int(interval / 10)
+
+        col = phys_value_array.shape[1]
+        row = phys_value_array.shape[0]
+        band = 1
+        dtype = gdal.GDT_Float32
+
+        output_file = output_path
+        output = gdal.GetDriverByName('GTiff').Create(output_file, col, row,
+                                                      band, dtype)
+        output.GetRasterBand(1).WriteArray(phys_value_array)
+
+        row_idx = [j for j in range(0, lat_array.shape[0], nspace)]
+        col_idx = [i for i in range(0, lat_array.shape[1], nspace)]
+
+        row_idx.append(lon_array.shape[0] - 1)
+        col_idx.append(lat_array.shape[1] - 1)
+
+        for i in row_idx:
+            for j in col_idx:
+                i = int(i)
+                j = int(j)
+
+                col = 10 * i - 1
+                row = 10 * j - 1
+
+                col = int(col)
+                row = int(row)
+
+                if col > 0 and row > 0:
+                    pass
+                elif row > 0 and col < 0:
+                    col = 0
+                elif col > 0 and row < 0:
+                    row = 0
+                else:
+                    row = 0
+                    col = 0
+
+                lat = lat_array[i, j].astype(np.float64)
+                lon = lon_array[i, j].astype(np.float64)
+
+                GCP = gdal.GCP(lon, lat, 0, row, col)
+                gcp.append(GCP)
+
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(4326)
+        output.SetProjection(srs.ExportToWkt())
+
+        wkt = output.GetProjection()
+        output.SetGCPs(gcp, wkt)
+        output = gdal.Warp(output_file,
+                           output,
+                           dstSRS='EPSG:4326',
+                           tps=True,
+                           outputType=dtype)
+
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(4326)
+        output.SetProjection(srs.ExportToWkt())
+
         output = None
 
     def boundary_box(self, box_coordinates=None):
@@ -647,3 +933,136 @@ class GcomCpy:
             write_resampled_raster(dataset)
         else:
             pass
+
+    def global_eqa(self, file_path, subdataset, output_path):
+        opened = gdal.Open(file_path)
+        error_dn = int(
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
+        slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
+        offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
+
+        for i in range(len(opened.GetSubDatasets())):
+            if subdataset in opened.GetSubDatasets()[i][0]:
+                image_array = gdal.Open(
+                    opened.GetSubDatasets()[i][0]).ReadAsArray().astype(
+                        np.float)
+            else:
+                pass
+
+        image_array[image_array == error_dn] = np.nan
+        phys_value_array = slope * image_array + offset
+
+        img = Image.fromarray(phys_value_array)
+        img.save(output_path)
+
+        del opened
+
+    def polar_stereo(self, file_path, subdataset, output_path):
+        opened = gdal.Open(file_path)
+        error_dn = int(
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
+        slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
+        offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
+
+        for i in range(len(opened.GetSubDatasets())):
+            if subdataset in opened.GetSubDatasets()[i][0]:
+                image_array = gdal.Open(
+                    opened.GetSubDatasets()[i][0]).ReadAsArray().astype(
+                        np.float)
+            else:
+                pass
+
+        image_array[image_array == error_dn] = np.nan
+        phys_value_array = slope * image_array + offset
+        image = Image.fromarray(phys_value_array)
+        image.save(output_path)
+
+        del opened
+
+    def global_eqr(self, file_path, subdataset, output_path):
+        opened = gdal.Open(file_path)
+        error_dn = int(
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
+        slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
+        offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
+
+        for i in range(len(opened.GetSubDatasets())):
+            if subdataset in opened.GetSubDatasets()[i][0]:
+                image_array = gdal.Open(
+                    opened.GetSubDatasets()[i][0]).ReadAsArray().astype(
+                        np.float)
+            else:
+                pass
+
+        image_array[image_array == error_dn] = np.nan
+        phys_value_array = slope * image_array + offset
+        transform = rasterio.transform.from_bounds(-180, -90, 180, 90,
+                                                   image_array.shape[1],
+                                                   image_array.shape[0])
+
+        with rasterio.open(output_path,
+                           'w',
+                           driver='GTiff',
+                           width=phys_value_array.shape[1],
+                           height=phys_value_array.shape[0],
+                           count=1,
+                           crs='EPSG:4326',
+                           transform=transform,
+                           dtype=phys_value_array.dtype) as output:
+            output.write(phys_value_array, 1)
+            output.close()
+
+        del opened
+
+    def num_bin_calculator(self, x, res, nrow):
+        return np.round(2 * nrow * np.cos(
+            (90 - ((x - 1) * (res) + (res) * (1 / 2))) * np.pi / 180))
+
+    def global_eqa_1dim(self, file_path, subdataset, output_path):
+        opened_gdal = gdal.Open(file_path)
+        error_dn = int(
+            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
+        slope = float(
+            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Slope'])
+        offset = float(
+            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Offset'])
+
+        opened = h5py.File(file_path)
+        opened_vector = opened['Image_data'][subdataset][()]
+
+        num_bin_calculator = self.num_bin_calculator
+
+        resolution = file_path[-9]
+
+        if resolution == 'F':
+            nrow = 4320
+        else:
+            nrow = 2160
+
+        ncol = int(nrow * 2)
+        output_E = np.zeros([int(nrow), int(ncol / 2)])
+        output_W = np.zeros([int(nrow), int(ncol / 2)])
+
+        containor = 0
+        for i in tqdm(range(nrow)):
+            bins = num_bin_calculator(i + 1, 1 / 24, nrow)
+            ith_row_values = opened_vector[int(containor):int(containor +bins)]
+            ith_row_values_E = opened_vector[int(containor):int(containor +(bins / 2 +bins % 2))]
+            ith_row_values_W = opened_vector[int(containor + bins / 2 +bins % 2):int(containor +bins)]
+            output_E[i:i + 1,int(ncol / 2 -len(ith_row_values_E)):ncol] = ith_row_values_E
+            output_W[i:i + 1, 0:len(ith_row_values_W)] = ith_row_values_W
+            containor = containor + bins
+
+        output_E = np.fliplr(output_E)
+        output_W = np.fliplr(output_W)
+
+        output_combined = np.concatenate([output_W, output_E], axis=1)
+        output_combined = np.flipud(output_combined)
+        output_combined = np.fliplr(output_combined)
+        output_combined[output_combined == error_dn] = np.nan
+        output_combined = slope * output_combined + offset
+
+        img = Image.fromarray(output_combined.astype(np.float))
+        img.save(output_path)
+
+        del opened_gdal, opened
