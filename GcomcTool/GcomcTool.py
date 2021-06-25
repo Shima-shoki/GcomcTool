@@ -959,8 +959,7 @@ class GcomCpy:
 
     def polar_stereo(self, file_path, subdataset, output_path):
         opened = gdal.Open(file_path)
-        error_dn = int(
-            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
+        error_dn = 65535
         slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
         offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
 
