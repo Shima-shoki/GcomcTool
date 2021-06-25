@@ -702,12 +702,12 @@ class GcomCpy:
                 pass
 
         error_dn = int(
-            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'])
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
         try:
             slope = float(
-                opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
+                opened.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace('d ',''))
             offset = float(
-                opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
+                opened.GetMetadata()[f'Image_data_{subdataset}_Offset'].replace('d ',''))
         except:
             pass
 
