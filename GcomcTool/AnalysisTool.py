@@ -11,7 +11,7 @@ import os
 from shapely import wkt
 
 
-class AnalysisTools:
+class AnalysisTool:
     def __init__(self):
         pass
 
