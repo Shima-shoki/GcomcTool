@@ -11,7 +11,7 @@ import os
 from shapely import wkt
 
 
-class training_data_processor:
+class TrainDataProcessor:
     def __init__(self):
         pass
 
