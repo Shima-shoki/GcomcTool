@@ -1,5 +1,6 @@
 import os
 import time
+import shutil
 import warnings
 from datetime import datetime as dt
 from datetime import timedelta
@@ -401,6 +402,7 @@ class GcomCpy:
             date_list.append(fileDate)
 
         date_list = list(set(date_list))
+        self.date_list = date_list
 
         mosaic_images = self.mosaic_images
 
@@ -537,6 +539,57 @@ class GcomCpy:
 
         else:
             pass
+
+    def combine_rsrf_tile(self,
+                          output_folder_name='combined',
+                          bands=[
+                              'Rs_SW03', 'Rs_VN01', 'Rs_VN02', 'Rs_VN03',
+                              'Rs_VN04', 'Rs_VN05', 'Rs_VN06', 'Rs_VN07',
+                              'Rs_VN08', 'Rs_VN10', 'Rs_VN11', 'Tb_TI01',
+                              'Tb_TI02'
+                          ]):
+        download_path = self.download_path
+        os.mkdir(download_path + '/temp')
+        reproject_func = self.reproject_all
+        for band in bands:
+            print(f'Processing band {band}...')
+            reproject_func(band,
+                           folder_name=f"temp/{band}",
+                           clip=True,
+                           merge=True)
+
+        band = bands[0]
+        with rasterio.open(glob(download_path + f"/temp/{band}/*")[0]) as ref:
+            ref_array = ref.read(1)
+            height = ref.shape[0]
+            width = ref.shape[1]
+            transform = ref.transform
+
+        date_list = self.date_list
+        os.mkdir(download_path + '/' + output_folder_name)
+        for date in date_list:
+            with rasterio.open(download_path + '/' + output_folder_name + '/' +
+                               f'RSRF_{date}.tif',
+                               'w',
+                               driver='GTiff',
+                               count=len(bands),
+                               width=width,
+                               height=height,
+                               transform=transform,
+                               crs='EPSG:4326',
+                               dtype=ref_array.dtype) as output:
+                cnt = 1
+                for sub_dataset in bands:
+                    with rasterio.open(
+                            download_path + '/' +
+                            f"temp/{sub_dataset}/{sub_dataset}_{date}_mosaic.tif"
+                    ) as opened:
+                        array = opened.read(1)
+                    output.write(array, cnt)
+                    output.set_band_description(cnt, sub_dataset)
+                    cnt += 1
+                output.close()
+        shutil.rmtree(download_path + '/temp')
 
     def clean_up(self):
         downloaded_products = self.downloaded_products
@@ -702,12 +755,15 @@ class GcomCpy:
                 pass
 
         error_dn = int(
-            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace(
+                'd ', ''))
         try:
             slope = float(
-                opened.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace('d ',''))
-            offset = float(
-                opened.GetMetadata()[f'Image_data_{subdataset}_Offset'].replace('d ',''))
+                opened.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace(
+                    'd ', ''))
+            offset = float(opened.GetMetadata()
+                           [f'Image_data_{subdataset}_Offset'].replace(
+                               'd ', ''))
         except:
             pass
 
@@ -937,7 +993,8 @@ class GcomCpy:
     def global_eqa(self, file_path, subdataset, output_path):
         opened = gdal.Open(file_path)
         error_dn = int(
-            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace(
+                'd ', ''))
         slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'])
         offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'])
 
@@ -960,9 +1017,14 @@ class GcomCpy:
     def polar_stereo(self, file_path, subdataset, output_path):
         opened = gdal.Open(file_path)
         error_dn = int(
-            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
-        slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace('d ',''))
-        offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'].replace('d ',''))
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace(
+                'd ', ''))
+        slope = float(
+            opened.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace(
+                'd ', ''))
+        offset = float(
+            opened.GetMetadata()[f'Image_data_{subdataset}_Offset'].replace(
+                'd ', ''))
 
         for i in range(len(opened.GetSubDatasets())):
             if subdataset in opened.GetSubDatasets()[i][0]:
@@ -982,9 +1044,14 @@ class GcomCpy:
     def global_eqr(self, file_path, subdataset, output_path):
         opened = gdal.Open(file_path)
         error_dn = int(
-            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
-        slope = float(opened.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace('d ',''))
-        offset = float(opened.GetMetadata()[f'Image_data_{subdataset}_Offset'].replace('d ',''))
+            opened.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace(
+                'd ', ''))
+        slope = float(
+            opened.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace(
+                'd ', ''))
+        offset = float(
+            opened.GetMetadata()[f'Image_data_{subdataset}_Offset'].replace(
+                'd ', ''))
 
         for i in range(len(opened.GetSubDatasets())):
             if subdataset in opened.GetSubDatasets()[i][0]:
@@ -1020,12 +1087,12 @@ class GcomCpy:
 
     def global_eqa_1dim(self, file_path, subdataset, output_path):
         opened_gdal = gdal.Open(file_path)
-        error_dn = int(
-            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Error_DN'].replace('d ',''))
-        slope = float(
-            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Slope'].replace('d ',''))
-        offset = float(
-            opened_gdal.GetMetadata()[f'Image_data_{subdataset}_Offset'].replace('d ',''))
+        error_dn = int(opened_gdal.GetMetadata()
+                       [f'Image_data_{subdataset}_Error_DN'].replace('d ', ''))
+        slope = float(opened_gdal.GetMetadata()
+                      [f'Image_data_{subdataset}_Slope'].replace('d ', ''))
+        offset = float(opened_gdal.GetMetadata()
+                       [f'Image_data_{subdataset}_Offset'].replace('d ', ''))
 
         opened = h5py.File(file_path)
         opened_vector = opened['Image_data'][subdataset][()]
