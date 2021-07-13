@@ -543,9 +543,9 @@ class GcomCpy:
     def combine_rsrf_tile(self,
                           output_folder_name='combined',
                           bands=[
-                              'Rs_SW03', 'Rs_VN01', 'Rs_VN02', 'Rs_VN03',
+                               'Rs_VN01', 'Rs_VN02', 'Rs_VN03',
                               'Rs_VN04', 'Rs_VN05', 'Rs_VN06', 'Rs_VN07',
-                              'Rs_VN08', 'Rs_VN10', 'Rs_VN11', 'Tb_TI01',
+                              'Rs_VN08', 'Rs_VN10', 'Rs_VN11', 'Rs_SW03','Tb_TI01',
                               'Tb_TI02'
                           ]):
         download_path = self.download_path
