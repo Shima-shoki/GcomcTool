@@ -1,4 +1,5 @@
 import geopandas as gpd
+import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
@@ -25,6 +26,7 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
 
+warnings.simplefilter(action='ignore',category=FutureWarning)
 
 class AnalysisTool:
     def __init__(self):
@@ -33,10 +35,13 @@ class AnalysisTool:
     def train_point_handler(self, shapefile_path, image_path, num_points=1000):
         raster = rasterio.open(image_path)
         gdf = gpd.read_file(shapefile_path)
+        
+        counts = raster.meta['count']
+        values = []
+        training_points = []
+        
 
-        training_points_candidates = []
-
-        while len(training_points_candidates) < num_points:
+        while len(training_points) < num_points:
             idx = np.random.randint(0, gdf['geometry'].count())
             bounds = gdf[gdf['geometry'].index == idx].total_bounds
 
@@ -54,36 +59,29 @@ class AnalysisTool:
                         point)].index) == 0:
                 pass
             else:
-                training_points_candidates.append(point)
+                val_list = []
+                for i in range(counts):
+                    array = raster.read(i + 1)
+                    val = array[raster.index(x, y)]
+                    val_list.append(val)
+                if np.isnan(val_list).any() == True:
+                    pass
+                else:
+                    values.append(val_list)
+                    training_points.append(point)
 
-        counts = raster.meta['count']
-        values = []
-        training_point = []
-
-        for point in tqdm(training_points_candidates):
-            lon = point.x
-            lat = point.y
-            val_list = []
-
-            for i in range(counts):
-                array = raster.read(i + 1)
-                val = array[raster.index(lon, lat)]
-                val_list.append(val)
-
-            if np.isnan(val_list).any() == True:
-                pass
-            else:
-                values.append(val_list)
-                training_point.append(point)
 
         del raster
 
-        return values, training_point
+        return values, training_points
 
     def train_data_process(self,
                            shapefile_dir_path,
-                           image_path,
-                           num_points=1000):
+                           image_path=None,
+                           num_points=1000,
+                           write_train_data=False,
+                           output_train_data_path=None,
+                           output_train_data_epsg=4326):
         train_point_handler = self.train_point_handler
         shapefile_list = glob(shapefile_dir_path + '/*.shp')
 
@@ -94,11 +92,11 @@ class AnalysisTool:
         lon = []
 
         cnt = 1
-        for shapefile in shapefile_list:
+        for shapefile in tqdm(shapefile_list):
             filename = os.path.basename(shapefile).replace('.shp', '')
+            
             values, training_point = train_point_handler(
                 shapefile, image_path, num_points)
-
             extracted_values.extend(values)
 
             lat.extend([point.x for point in training_point])
@@ -120,6 +118,13 @@ class AnalysisTool:
                                       geometry=gpd.points_from_xy(
                                           output_df.Latitude,
                                           output_df.Longitude))
+        output_gdf.set_crs(epsg=4326,inplace=True)
+        
+        if write_train_data==True:
+            output_gdf=output_gdf.to_crs({'init': f'epsg:{output_train_data_epsg}'})
+            output_gdf.drop('extracted_values',axis=1).to_file(output_train_data_path)
+        else:
+            pass
 
         return output_gdf
 
@@ -128,7 +133,7 @@ class AnalysisTool:
                   RGBoption=False,
                   return_arrays=False,
                   n_components=10,
-                  exception=[]):
+                  exception=[],nanvalue=np.nan):
         raster = rasterio.open(image_path)
         width = raster.meta["width"]
         height = raster.meta["height"]
@@ -161,9 +166,9 @@ class AnalysisTool:
 
         pca_image = pca.transform(bands_stacked[0])
 
-        first_component = pca_image[:, 0].reshape(shape)
-        second_component = pca_image[:, 1].reshape(shape)
-        third_component = pca_image[:, 2].reshape(shape)
+        first_component = self.nan_mask(image_path,pca_image[:, 0].reshape(shape),nanvalue)
+        second_component = self.nan_mask(image_path,pca_image[:, 1].reshape(shape),nanvalue)
+        third_component = self.nan_mask(image_path,pca_image[:, 2].reshape(shape),nanvalue)
 
         if RGBoption == True:
             self.visualize([0, 1, 2],
@@ -182,12 +187,16 @@ class AnalysisTool:
         else:
             pass
 
-    def visualize(self, rgb_band, array=None, image_path=None):
+    def visualize(self, rgb_band, array=None, image_path=None, nanvalue=np.nan):
         if image_path != None:
             raster = rasterio.open(image_path)
             R = raster.read(rgb_band[0])
             G = raster.read(rgb_band[1])
             B = raster.read(rgb_band[2])
+            
+            R=self.nan_mask(image_path,R,nanvalue)
+            G=self.nan_mask(image_path,G,nanvalue)
+            B=self.nan_mask(image_path,B,nanvalue)
 
             R = (255 / np.nanmax(R) * R).astype(np.uint8)
             G = (255 / np.nanmax(G) * G).astype(np.uint8)
@@ -219,7 +228,8 @@ class AnalysisTool:
             num_points=1000,
             preview=True,
             output_file_name='un_supervised_classification',
-            params=None):
+            params=None,
+            nanvalue=np.nan):
 
         input_data = self.train_data_process(train_data_path, path_to_image,
                                              num_points)
@@ -243,7 +253,7 @@ class AnalysisTool:
                 'The available methods are either GaussianMixture or KMeans.')
 
         raster = rasterio.open(path_to_image)
-        coutns = raster.meta['count']
+        counts = raster.meta['count']
 
         image_array = []
         for i in range(counts):
@@ -253,21 +263,23 @@ class AnalysisTool:
 
         for i in tqdm(range(image_array[0].shape[0])):
             spectrum_data_at_row_i = []
-            spectrum_data_at_row_i_nan_check=[]
+            spectrum_data_at_row_i_nan_check = []
             for m in range(counts):
                 spectrum_data_at_row_i.append(np.nan_to_num(image_array[m][i]))
                 spectrum_data_at_row_i_nan_check.append(image_array[m][i])
 
             spectrum_data_at_row_i_T = np.transpose(
                 np.array(spectrum_data_at_row_i))
-            spectrum_data_at_row_i_nan_check_T = np.transpose(np.array(spectrum_data_at_row_i_nan_check))
-            
-            nan_ind=np.where(np.isnan(spectrum_data_at_row_i_nan_check_T))[0]
-            classified = np.transpose(model.predict(spectrum_data_at_row_i_T)).astype(np.float)
-            classified[nan_ind]=np.nan
+            spectrum_data_at_row_i_nan_check_T = np.transpose(
+                np.array(spectrum_data_at_row_i_nan_check))
+
+            nan_ind = np.where(np.isnan(spectrum_data_at_row_i_nan_check_T))[0]
+            classified = np.transpose(
+                model.predict(spectrum_data_at_row_i_T)).astype(np.float)
+            classified[nan_ind] = nanvalue
             cluster_output.append(classified)
 
-        output_image = np.array(cluster_output).astype(np.uint8)
+        output_image = np.array(cluster_output)
 
         output_tif_name = output_file_name + '_' + method + '.tif'
 
@@ -300,7 +312,8 @@ class AnalysisTool:
                                   preview=True,
                                   output_file_name='supervised_classification',
                                   test_size=0.2,
-                                  params={}):
+                                  params={},
+                                  nanvalue=np.nan):
 
         input_data = self.train_data_process(train_data_path, path_to_image,
                                              num_points)
@@ -351,23 +364,26 @@ class AnalysisTool:
 
         for i in tqdm(range(image_array[0].shape[0])):
             spectrum_data_at_row_i = []
-            spectrum_data_at_row_i_nan_check=[]
+            spectrum_data_at_row_i_nan_check = []
             for m in range(counts):
                 spectrum_data_at_row_i.append(np.nan_to_num(image_array[m][i]))
                 spectrum_data_at_row_i_nan_check.append(image_array[m][i])
-                
-            spectrum_data_at_row_i_T = np.transpose(np.array(spectrum_data_at_row_i))
-            spectrum_data_at_row_i_nan_check_T = np.transpose(np.array(spectrum_data_at_row_i_nan_check))
-                        
-            nan_ind=np.where(np.isnan(spectrum_data_at_row_i_nan_check_T))[0]
-            
-            classified = np.transpose(model.predict(spectrum_data_at_row_i_T)).astype(np.float)
-            classified[nan_ind]=np.nan
+
+            spectrum_data_at_row_i_T = np.transpose(
+                np.array(spectrum_data_at_row_i))
+            spectrum_data_at_row_i_nan_check_T = np.transpose(
+                np.array(spectrum_data_at_row_i_nan_check))
+
+            nan_ind = np.where(np.isnan(spectrum_data_at_row_i_nan_check_T))[0]
+
+            classified = np.transpose(
+                model.predict(spectrum_data_at_row_i_T)).astype(np.float)
+            classified[nan_ind] = nanvalue
             classified_output.append(classified)
 
         output_image = np.array(classified_output)
         output_tif_name = output_file_name + '_' + method + '.tif'
-        
+
         with rasterio.open(output_path + '/' + output_tif_name,
                            'w',
                            height=output_image.shape[0],
@@ -387,3 +403,36 @@ class AnalysisTool:
             pass
 
         del raster
+    
+    def nan_mask(self,path_to_image,input_array,nanvalue):
+        raster = rasterio.open(path_to_image)
+        counts = raster.meta['count']
+
+        image_array = []
+        for i in range(counts):
+            image_array.append(raster.read(i + 1))
+            
+        nan_mask=[]
+        
+        for i in range(image_array[0].shape[0]):
+            spectrum_data_at_row_i_nan_check = []
+            mask=np.zeros(image_array[0].shape[1])
+            
+            for m in range(counts):
+                spectrum_data_at_row_i_nan_check.append(image_array[m][i])
+
+            spectrum_data_at_row_i_nan_check_T = np.transpose(
+                np.array(spectrum_data_at_row_i_nan_check))
+
+            nan_ind = np.where(np.isnan(spectrum_data_at_row_i_nan_check_T))[0]
+
+            mask[nan_ind] = 1
+            nan_mask.append(mask)
+
+        nan_mask=np.array(nan_mask)
+        
+        idx=np.where(nan_mask==1)
+        input_array[idx]=nanvalue
+
+        return input_array
+        
