@@ -27,7 +27,6 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
 
 warnings.simplefilter(action='ignore',category=FutureWarning)
-%matplotlib inline
 
 class AnalysisTool:
     def __init__(self):
