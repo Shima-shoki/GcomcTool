@@ -13,6 +13,7 @@ import os
 from shapely import wkt
 from sklearn.decomposition import PCA
 from rasterio.plot import show
+from glob import glob
 from PIL import Image, ImageOps
 
 from sklearn import metrics
@@ -172,28 +173,38 @@ class AnalysisTool:
         pca_image = pca.transform(bands_stacked[0])
 
         first_component = self.nan_mask(image_path,
-                                        pca_image[:,0].reshape(shape), nanvalue)
+                                        pca_image[:,
+                                                  0].reshape(shape), nanvalue)
         second_component = self.nan_mask(image_path,
-                                         pca_image[:,1].reshape(shape), nanvalue)
+                                         pca_image[:,
+                                                   1].reshape(shape), nanvalue)
         third_component = self.nan_mask(image_path,
-                                        pca_image[:,2].reshape(shape), nanvalue)
+                                        pca_image[:,
+                                                  2].reshape(shape), nanvalue)
 
         if RGBoption == True:
             self.visualize([0, 1, 2],
-                           array=np.stack([first_component, second_component,third_component]),
-                           image_save_path=image_save_path,image_name=image_name)
+                           array=np.stack([
+                               first_component, second_component,
+                               third_component
+                           ]),
+                           image_save_path=image_save_path,
+                           image_name=image_name)
         else:
-            first_component = (255/np.nanmax(first_component)*first_component).astype(np.uint8)
-            image=Image.fromarray(first_component)
-            image=ImageOps.equalize(image)
+            first_component = (255 / np.nanmax(first_component) *
+                               first_component).astype(np.uint8)
+            image = Image.fromarray(first_component)
+            image = ImageOps.equalize(image)
             image.show()
-            if image_save_path!=None:
-                image.save(image_save_path+'/'+image_name)
+            if image_save_path != None:
+                image.save(image_save_path + '/' + image_name)
             else:
                 pass
 
         if return_arrays == True:
-            return [pca_image[:, i].reshape(shape) for i in range(n_components)]
+            return [
+                pca_image[:, i].reshape(shape) for i in range(n_components)
+            ]
         else:
             pass
 
@@ -235,23 +246,23 @@ class AnalysisTool:
             image.show()
 
         if image_save_path != None:
-            image.save(image_save_path+'/'+image_name)
+            image.save(image_save_path + '/' + image_name)
         else:
             pass
 
     def un_supervised_classification(
-        self,
-        path_to_image,
-        output_path,
-        train_data_path,
-        method='GaussianMixture',
-        n=30,
-        num_points=1000,
-        preview=True,
-        output_file_name='un_supervised_classification',
-        params=None,
-        nanvalue=np.nan,
-        cmap='jet'):
+            self,
+            path_to_image,
+            output_path,
+            train_data_path,
+            method='GaussianMixture',
+            n=30,
+            num_points=1000,
+            preview=True,
+            output_file_name='un_supervised_classification',
+            params=None,
+            nanvalue=np.nan,
+            cmap='jet'):
 
         input_data = self.train_data_process(train_data_path, path_to_image,
                                              num_points)
@@ -370,7 +381,7 @@ class AnalysisTool:
 
         confusion_matrix = metrics.confusion_matrix(y_test,
                                                     model.predict(X_test))
-        accuracy=metrics.accuracy_score(y_test, model.predict(X_test))
+        accuracy = metrics.accuracy_score(y_test, model.predict(X_test))
         kappa = metrics.cohen_kappa_score(y_test, model.predict(X_test))
 
         print(f'Confusion matrix is:')
@@ -460,3 +471,79 @@ class AnalysisTool:
         input_array[idx] = nanvalue
 
         return input_array
+
+    def create_composite(self,
+                         path_to_image_folder,
+                         output_path,
+                         singleband=True,
+                         merge_method='mean',
+                         merge_image_name='merged_by_'):
+        file_list = glob(path_to_image_folder + '/*')
+        if singleband == True:
+            with rasterio.open(file_list[0]) as opened:
+                ref = opened
+                shape = opened.read(1).shape
+            opened_array_list = []
+            for file in file_list:
+                with rasterio.open(file) as opened:
+                    opened_array = opened.read(1).flatten()
+                    opened_array_list.append(opened_array)
+            if merge_method == 'mean':
+                output_array = np.nanmean(opened_array_list, axis=0)
+            elif merge_method == 'max':
+                output_array = np.nanmax(opened_array_list, axis=0)
+            elif merge_method == 'min':
+                output_array = np.nanmin(opened_array_list, axis=0)
+            else:
+                print('The available merging methods are mean, max, or min.')
+            output_array = output_array.reshape(shape)
+            with rasterio.open(output_path +
+                               f"/{merge_image_name}{merge_method}.tif",
+                               'w',
+                               driver='GTiff',
+                               width=output_array.shape[1],
+                               height=output_array.shape[0],
+                               count=1,
+                               crs='EPSG:4326',
+                               transform=ref.transform,
+                               dtype=output_array.dtype) as output:
+                output.write(output_array, 1)
+                output.close()
+        else:
+            with rasterio.open(file_list[0]) as opened:
+                ref = opened
+                shape = (opened.meta['height'], opened.meta['width'])
+                count = opened.meta['count']
+                descriptions = opened.descriptions
+            band_array_list = []
+            for i in range(count):
+                opened_array_list = []
+                for file in file_list:
+                    with rasterio.open(file) as opened:
+                        opened_array = opened.read(i + 1).flatten()
+                        opened_array_list.append(opened_array)
+                if merge_method == 'mean':
+                    output_array = np.nanmean(opened_array_list, axis=0)
+                elif merge_method == 'max':
+                    output_array = np.nanmax(opened_array_list, axis=0)
+                elif merge_method == 'min':
+                    output_array = np.nanmin(opened_array_list, axis=0)
+                else:
+                    print(
+                        'The available merging methods are mean, max, or min.')
+                output_array = output_array.reshape(shape)
+                band_array_list.append(output_array)
+            with rasterio.open(output_path +
+                               f"/{merge_image_name}{merge_method}.tif",
+                               'w',
+                               driver='GTiff',
+                               width=shape[1],
+                               height=shape[0],
+                               count=count,
+                               crs='EPSG:4326',
+                               transform=ref.transform,
+                               dtype=output_array.dtype) as output:
+                for i in range(count):
+                    output.write(band_array_list[i], i + 1)
+                    output.set_band_description(i + 1, descriptions[i])
+                output.close()
