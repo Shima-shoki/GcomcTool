@@ -26,7 +26,8 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
 
-warnings.simplefilter(action='ignore',category=FutureWarning)
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 
 class AnalysisTool:
     def __init__(self):
@@ -35,11 +36,10 @@ class AnalysisTool:
     def train_point_handler(self, shapefile_path, image_path, num_points=1000):
         raster = rasterio.open(image_path)
         gdf = gpd.read_file(shapefile_path)
-        
+
         counts = raster.meta['count']
         values = []
         training_points = []
-        
 
         while len(training_points) < num_points:
             idx = np.random.randint(0, gdf['geometry'].count())
@@ -70,7 +70,6 @@ class AnalysisTool:
                     values.append(val_list)
                     training_points.append(point)
 
-
         del raster
 
         return values, training_points
@@ -94,7 +93,7 @@ class AnalysisTool:
         cnt = 1
         for shapefile in tqdm(shapefile_list):
             filename = os.path.basename(shapefile).replace('.shp', '')
-            
+
             values, training_point = train_point_handler(
                 shapefile, image_path, num_points)
             extracted_values.extend(values)
@@ -118,11 +117,13 @@ class AnalysisTool:
                                       geometry=gpd.points_from_xy(
                                           output_df.Latitude,
                                           output_df.Longitude))
-        output_gdf.set_crs(epsg=4326,inplace=True)
-        
-        if write_train_data==True:
-            output_gdf=output_gdf.to_crs({'init': f'epsg:{output_train_data_epsg}'})
-            output_gdf.drop('extracted_values',axis=1).to_file(output_train_data_path)
+        output_gdf.set_crs(epsg=4326, inplace=True)
+
+        if write_train_data == True:
+            output_gdf = output_gdf.to_crs(
+                {'init': f'epsg:{output_train_data_epsg}'})
+            output_gdf.drop('extracted_values',
+                            axis=1).to_file(output_train_data_path)
         else:
             pass
 
@@ -133,7 +134,10 @@ class AnalysisTool:
                   RGBoption=False,
                   return_arrays=False,
                   n_components=10,
-                  exception=[],nanvalue=np.nan):
+                  exception=[],
+                  nanvalue=np.nan,
+                  image_save_path=None,
+                  image_name='pca.png'):
         raster = rasterio.open(image_path)
         width = raster.meta["width"]
         height = raster.meta["height"]
@@ -166,37 +170,48 @@ class AnalysisTool:
 
         pca_image = pca.transform(bands_stacked[0])
 
-        first_component = self.nan_mask(image_path,pca_image[:, 0].reshape(shape),nanvalue)
-        second_component = self.nan_mask(image_path,pca_image[:, 1].reshape(shape),nanvalue)
-        third_component = self.nan_mask(image_path,pca_image[:, 2].reshape(shape),nanvalue)
+        first_component = self.nan_mask(image_path,
+                                        pca_image[:,0].reshape(shape), nanvalue)
+        second_component = self.nan_mask(image_path,
+                                         pca_image[:,1].reshape(shape), nanvalue)
+        third_component = self.nan_mask(image_path,
+                                        pca_image[:,2].reshape(shape), nanvalue)
 
         if RGBoption == True:
             self.visualize([0, 1, 2],
-                           array=np.stack([
-                               first_component, second_component,
-                               third_component
-                           ]))
+                           array=np.stack([first_component, second_component,third_component]),
+                           image_save_path=image_save_path,image_name=image_name)
         else:
-            first_component = first_component
-            show(first_component)
+            first_component = (255/np.nanmax(first_component)*first_component).astype(np.uint8)
+            image=Image.fromarray(first_component)
+            image=ImageOps.equalize(image)
+            image.show()
+            if image_save_path!=None:
+                image.save(image_save_path+'/'+image_name)
+            else:
+                pass
 
         if return_arrays == True:
-            return [
-                pca_image[:, i].reshape(shape) for i in range(n_components)
-            ]
+            return [pca_image[:, i].reshape(shape) for i in range(n_components)]
         else:
             pass
 
-    def visualize(self, rgb_band, array=None, image_path=None, nanvalue=np.nan):
+    def visualize(self,
+                  rgb_band,
+                  array=None,
+                  image_path=None,
+                  nanvalue=np.nan,
+                  image_save_path=None,
+                  image_name='saved_image.png'):
         if image_path != None:
             raster = rasterio.open(image_path)
             R = raster.read(rgb_band[0])
             G = raster.read(rgb_band[1])
             B = raster.read(rgb_band[2])
-            
-            R=self.nan_mask(image_path,R,nanvalue)
-            G=self.nan_mask(image_path,G,nanvalue)
-            B=self.nan_mask(image_path,B,nanvalue)
+
+            R = self.nan_mask(image_path, R, nanvalue)
+            G = self.nan_mask(image_path, G, nanvalue)
+            B = self.nan_mask(image_path, B, nanvalue)
 
             R = (255 / np.nanmax(R) * R).astype(np.uint8)
             G = (255 / np.nanmax(G) * G).astype(np.uint8)
@@ -217,6 +232,11 @@ class AnalysisTool:
             image_stack = Image.fromarray(np.dstack((R, G, B)))
             image = ImageOps.equalize(image_stack)
             image.show()
+
+        if image_save_path != None:
+            image.save(image_save_path+'/'+image_name)
+        else:
+            pass
 
     def un_supervised_classification(
             self,
@@ -403,21 +423,21 @@ class AnalysisTool:
             pass
 
         del raster
-    
-    def nan_mask(self,path_to_image,input_array,nanvalue):
+
+    def nan_mask(self, path_to_image, input_array, nanvalue):
         raster = rasterio.open(path_to_image)
         counts = raster.meta['count']
 
         image_array = []
         for i in range(counts):
             image_array.append(raster.read(i + 1))
-            
-        nan_mask=[]
-        
+
+        nan_mask = []
+
         for i in range(image_array[0].shape[0]):
             spectrum_data_at_row_i_nan_check = []
-            mask=np.zeros(image_array[0].shape[1])
-            
+            mask = np.zeros(image_array[0].shape[1])
+
             for m in range(counts):
                 spectrum_data_at_row_i_nan_check.append(image_array[m][i])
 
@@ -429,10 +449,9 @@ class AnalysisTool:
             mask[nan_ind] = 1
             nan_mask.append(mask)
 
-        nan_mask=np.array(nan_mask)
-        
-        idx=np.where(nan_mask==1)
-        input_array[idx]=nanvalue
+        nan_mask = np.array(nan_mask)
+
+        idx = np.where(nan_mask == 1)
+        input_array[idx] = nanvalue
 
         return input_array
-        
