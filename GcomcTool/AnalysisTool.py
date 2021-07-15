@@ -1,4 +1,5 @@
 import geopandas as gpd
+import matplotlib as mpl
 import warnings
 import numpy as np
 import matplotlib.pyplot as plt
@@ -239,17 +240,18 @@ class AnalysisTool:
             pass
 
     def un_supervised_classification(
-            self,
-            path_to_image,
-            output_path,
-            train_data_path,
-            method='GaussianMixture',
-            n=30,
-            num_points=1000,
-            preview=True,
-            output_file_name='un_supervised_classification',
-            params=None,
-            nanvalue=np.nan):
+        self,
+        path_to_image,
+        output_path,
+        train_data_path,
+        method='GaussianMixture',
+        n=30,
+        num_points=1000,
+        preview=True,
+        output_file_name='un_supervised_classification',
+        params=None,
+        nanvalue=np.nan,
+        cmap='jet'):
 
         input_data = self.train_data_process(train_data_path, path_to_image,
                                              num_points)
@@ -317,7 +319,7 @@ class AnalysisTool:
 
         if preview == True:
             fig, ax = plt.subplots(figsize=(15, 15))
-            rasterio.plot.show(output_image, ax=ax, cmap='hsv')
+            rasterio.plot.show(output_image, ax=ax, cmap=cmap)
         else:
             pass
 
@@ -333,7 +335,8 @@ class AnalysisTool:
                                   output_file_name='supervised_classification',
                                   test_size=0.2,
                                   params={},
-                                  nanvalue=np.nan):
+                                  nanvalue=np.nan,
+                                  cmap='jet'):
 
         input_data = self.train_data_process(train_data_path, path_to_image,
                                              num_points)
@@ -367,10 +370,12 @@ class AnalysisTool:
 
         confusion_matrix = metrics.confusion_matrix(y_test,
                                                     model.predict(X_test))
+        accuracy=metrics.accuracy_score(y_test, model.predict(X_test))
         kappa = metrics.cohen_kappa_score(y_test, model.predict(X_test))
 
         print(f'Confusion matrix is:')
         print(confusion_matrix)
+        print(f'Accuracy {accuracy:.5f}')
         print(f'Kappa coefficient {kappa:.5f}')
 
         raster = rasterio.open(path_to_image)
@@ -418,7 +423,7 @@ class AnalysisTool:
 
         if preview == True:
             fig, ax = plt.subplots(figsize=(15, 15))
-            rasterio.plot.show(output_image, ax=ax, cmap='jet')
+            rasterio.plot.show(output_image, ax=ax, cmap=cmap)
         else:
             pass
 
