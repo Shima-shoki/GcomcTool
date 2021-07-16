@@ -256,7 +256,7 @@ class AnalysisTool:
             self,
             path_to_image,
             output_path,
-            train_data_path,
+            train_data_path=None,input_data=[],
             method='GaussianMixture',
             n=30,
             num_points=1000,
@@ -265,10 +265,12 @@ class AnalysisTool:
             params=None,
             nanvalue=np.nan,
             cmap='jet'):
-
-        input_data = self.train_data_process(train_data_path, path_to_image,
-                                             num_points)
-
+        
+        if len(input_data)!=0:
+            input_data = input_data
+        else:
+            input_data= self.train_data_process(train_data_path, path_to_image,num_points)
+            
         data = input_data['extracted_values']
         data = [spectrum for spectrum in data]
         X = np.array(data)
@@ -341,7 +343,8 @@ class AnalysisTool:
     def supervised_classification(self,
                                   path_to_image,
                                   output_path,
-                                  train_data_path,
+                                  train_data_path=None,
+                                  input_data=[],
                                   method='RandomForest',
                                   num_points=1000,
                                   preview=True,
@@ -350,9 +353,11 @@ class AnalysisTool:
                                   params={},
                                   nanvalue=np.nan,
                                   cmap='jet'):
-
-        input_data = self.train_data_process(train_data_path, path_to_image,
-                                             num_points)
+        
+        if len(input_data)!=0:
+            input_data = input_data
+        else:
+            input_data= self.train_data_process(train_data_path, path_to_image,num_points)
 
         data = input_data['extracted_values']
         data = [spectrum for spectrum in data]
