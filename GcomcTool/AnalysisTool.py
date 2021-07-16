@@ -44,6 +44,9 @@ class AnalysisTool:
         counts = raster.meta['count']
         values = []
         training_points = []
+        
+        array_list=[raster.read(i+1) for i in range(counts)]
+        
 
         while len(training_points) < num_points:
             idx = np.random.randint(0, gdf['geometry'].count())
@@ -65,7 +68,8 @@ class AnalysisTool:
             else:
                 val_list = []
                 for i in range(counts):
-                    array = raster.read(i + 1)
+                    #array = raster.read(i + 1)
+                    array=array_list[i]
                     val = array[raster.index(x, y)]
                     val_list.append(val)
                 if np.isnan(val_list).any() == True:
