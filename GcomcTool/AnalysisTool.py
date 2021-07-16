@@ -15,6 +15,8 @@ from sklearn.decomposition import PCA
 from rasterio.plot import show
 from glob import glob
 from PIL import Image, ImageOps
+import rasterio.mask
+import fiona
 
 from sklearn import metrics
 
@@ -547,3 +549,45 @@ class AnalysisTool:
                     output.write(band_array_list[i], i + 1)
                     output.set_band_description(i + 1, descriptions[i])
                 output.close()
+
+    def clip(self, path_to_image, path_to_shapefile, path_to_output):
+        with fiona.open(path_to_shapefile, 'r') as shapefile:
+            shapes = [feature['geometry'] for feature in shapefile]
+
+        with rasterio.open(path_to_image) as src:
+            out_image, out_transform = rasterio.mask.mask(src,
+                                                          shapes,
+                                                          crop=True)
+            out_meta = src.meta
+
+        out_meta.update({
+            'driver': 'GTiff',
+            'height': out_image.shape[1],
+            'width': out_image.shape[2],
+            'transform': out_transform
+        })
+        
+        filename=os.path.splitext(os.path.basename(path_to_image))[0]
+        with rasterio.open(path_to_output+'/'+filename+'_clipped.tif','w',**out_meta) as opened:
+            opened.write(out_image)
+            
+    def combine_bands(self,path_to_folder,path_to_output,output_filename='combined'):
+        files=glob(path_to_folder+'/*')
+        ref=rasterio.open(files[0])
+        
+        with rasterio.open(path_to_output+'/'+output_filename+'.tif',
+                           'w',
+                           driver='GTiff',
+                           width=ref.meta['width'],
+                           height=ref.meta['height'],
+                           count=len(files),
+                           crs='EPSG:4326',
+                           transform=ref.transform,
+                           dtype=ref.read(1).dtype) as opened:
+            cnt=1
+            for file in files:
+                opened.write(rasterio.open(file).read(1),cnt)
+                band_name=os.path.splitext(os.path.basename(file))[0]
+                opened.set_band_description(cnt,band_name)
+                cnt+=1
+            opened.close()
