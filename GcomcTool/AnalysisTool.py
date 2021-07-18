@@ -559,14 +559,14 @@ class AnalysisTool:
                     output.set_band_description(i + 1, descriptions[i])
                 output.close()
 
-    def clip(self, path_to_image, path_to_shapefile, path_to_output):
+    def clip(self, path_to_image, path_to_shapefile, path_to_output,nodata=np.nan):
         with fiona.open(path_to_shapefile, 'r') as shapefile:
             shapes = [feature['geometry'] for feature in shapefile]
 
         with rasterio.open(path_to_image) as src:
             out_image, out_transform = rasterio.mask.mask(src,
                                                           shapes,
-                                                          crop=True)
+                                                          crop=True,nodata=np.nan)
             out_meta = src.meta
 
         out_meta.update({
