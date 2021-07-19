@@ -1,4 +1,10 @@
 import geopandas as gpd
+from fiona.crs import from_epsg
+import json
+import pycrs
+from rasterio.enums import Resampling
+import os, glob, shutil
+from tqdm import tqdm
 import matplotlib as mpl
 import warnings
 import numpy as np
@@ -16,7 +22,9 @@ from rasterio.plot import show
 from glob import glob
 from PIL import Image, ImageOps
 import rasterio.mask
+from shapely.geometry import box
 import fiona
+from rasterio.warp import calculate_default_transform, reproject, Resampling
 
 from sklearn import metrics
 
@@ -600,3 +608,83 @@ class AnalysisTool:
                 opened.set_band_description(cnt,band_name)
                 cnt+=1
             opened.close()
+            
+    def reprojection_to_crs(self,path_to_image,dst_crs='EPSG:4326',remove=False):
+        epsg='_crs_'+dst_crs.replace('EPSG:','')
+        dst_path=path_to_image.replace(os.path.basename(path_to_image),'')
+        filename=os.path.splitext(os.path.basename(path_to_image))[0]
+        with rasterio.open(path_to_image) as src:
+            transform, width, height = calculate_default_transform(src.crs, dst_crs, src.width, src.height, *src.bounds)
+            meta = src.meta.copy()
+            meta.update({
+                'crs': dst_crs,
+                'transform': transform,
+                'width': width,
+                'height': height
+            })
+            
+            
+            with rasterio.open(dst_path+filename+epsg+'.tif', 'w', **meta) as dst:
+                for i in range(1, src.count + 1):
+                    reproject(
+                        source=rasterio.band(src, i),
+                        destination=rasterio.band(dst, i),
+                        src_transform=src.transform,
+                        src_crs=src.crs,
+                        dst_transform=transform,
+                        dst_crs=dst_crs,
+                        resampling=Resampling.nearest)
+        if remove==True:
+            os.remove(path_to_image)
+        else:
+            pass
+    
+    def align_raster(self,path_to_ref_image,path_to_target_image,remove=True):
+        with rasterio.open(path_to_ref_image) as ref:
+            bounds=ref.bounds
+            height=ref.meta["height"]
+            width=ref.meta["width"]
+            crs=ref.meta["crs"]
+            transform=ref.meta["transform"]
+        
+        bbox = box(bounds[0], bounds[1], bounds[2], bounds[3])
+        geo = gpd.GeoDataFrame({'geometry': bbox}, index=[0], crs=from_epsg(4326))
+        geo = geo.to_crs(crs=crs)
+        coords=[json.loads(geo.to_json())['features'][0]['geometry']]
+        
+        dst_path=path_to_target_image.replace(os.path.basename(path_to_target_image),'')
+        filename=os.path.splitext(os.path.basename(path_to_target_image))[0]
+        os.mkdir(dst_path+'/temp')
+        
+        with rasterio.open(path_to_target_image) as src:
+            out_img, out_transform = rasterio.mask.mask(src, coords, crop=True,filled=False)
+            src_crs=src.crs
+            src_count=src.count
+            dtype=out_img.dtype
+        
+        with rasterio.open(dst_path+'/temp'+f'/{filename}_clipped.tif','w',driver='GTiff',
+                           width=out_img.shape[2],
+                           height=out_img.shape[1],
+                           count=src_count,
+                           crs=src_crs,
+                           transform=out_transform,
+                           dtype=dtype) as output:
+            for i in range(src_count):
+                output.write(out_img[i],i+1)
+            output.close()
+        
+        with rasterio.open(dst_path+'/temp'+f'/{filename}_clipped.tif') as src_clipped:
+            clipped_resampled=src_clipped.read(out_shape=(height,width),resampling=Resampling.nearest)
+        
+        with rasterio.open(dst_path+f'/{filename}_aligned.tif','w',driver='GTiff',
+                           width=width,
+                           height=height,
+                           count=src_count,
+                           crs=crs,
+                           transform=transform,
+                           dtype=dtype) as dst:
+            for i in range(src_count):
+                dst.write(clipped_resampled[i],i+1)
+            dst.close()
+            
+        shutil.rmtree(dst_path+'/temp')
