@@ -695,7 +695,7 @@ class AnalysisTool:
         else:
             pass
     
-    def align_raster(self,path_to_ref_image,path_to_target_image,remove=True):
+   def align_raster(self,path_to_ref_image,path_to_target_image,remove=True,nodata=np.nan):
         with rasterio.open(path_to_ref_image) as ref:
             bounds=ref.bounds
             height=ref.meta["height"]
@@ -713,7 +713,7 @@ class AnalysisTool:
         os.mkdir(dst_path+'/temp')
         
         with rasterio.open(path_to_target_image) as src:
-            out_img, out_transform = rasterio.mask.mask(src, coords, crop=True,filled=False)
+            out_img, out_transform = rasterio.mask.mask(src, coords, crop=True,filled=False,nodata=nodata)
             src_crs=src.crs
             src_count=src.count
             dtype=out_img.dtype
