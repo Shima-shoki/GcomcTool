@@ -1,37 +1,28 @@
-import geopandas as gpd
-from fiona.crs import from_epsg
+import os, shutil,math,warnings
+from glob import glob
+from tqdm import tqdm
 import json
 import pycrs
-from rasterio.enums import Resampling
-import os, glob, shutil
-from tqdm import tqdm
-import matplotlib as mpl
-import warnings
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
-from shapely.geometry import Point
-import rasterio
-import math
-from tqdm import tqdm
-import pandas as pd
-from glob import glob
-import os
-from shapely import wkt
-from sklearn.decomposition import PCA
-from rasterio.plot import show
-from glob import glob
-from PIL import Image, ImageOps
-import rasterio.mask
-from shapely.geometry import box
 import fiona
+from fiona.crs import from_epsg
+from PIL import Image, ImageOps
+from shapely import wkt
+from shapely.geometry import box,Point
+import pandas as pd
+import geopandas as gpd
+import rasterio
+import rasterio.mask
+from rasterio.plot import show
+from rasterio.enums import Resampling
 from rasterio.warp import calculate_default_transform, reproject, Resampling
-
+from sklearn.decomposition import PCA
 from sklearn import metrics
-
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import KMeans
 from sklearn.model_selection import train_test_split
-
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
@@ -45,15 +36,22 @@ class AnalysisTool:
     def __init__(self):
         pass
 
-    def train_point_handler(self, shapefile_path, image_path, num_points=1000):
-        raster = rasterio.open(image_path)
+    def train_point_handler(self, shapefile_path, image_path, array_list=[],raster=None,num_points=1000):
+        
         gdf = gpd.read_file(shapefile_path)
 
-        counts = raster.meta['count']
+        
         values = []
         training_points = []
         
-        array_list=[raster.read(i+1) for i in range(counts)]
+        if len(array_list)==0:
+            raster = rasterio.open(image_path)
+            array_list=[raster.read(i+1) for i in range(counts)]
+        else:
+            raster=raster
+            array_list=array_list
+        
+        counts = raster.meta['count']
         
 
         while len(training_points) < num_points:
@@ -97,6 +95,12 @@ class AnalysisTool:
                            write_train_data=False,
                            output_train_data_path=None,
                            output_train_data_epsg=4326):
+        
+        raster = rasterio.open(image_path)
+        counts=raster.meta['count']
+        array_list=[raster.read(i+1) for i in range(counts)]
+        
+        
         train_point_handler = self.train_point_handler
         shapefile_list = glob(shapefile_dir_path + '/*.shp')
 
@@ -111,7 +115,7 @@ class AnalysisTool:
             filename = os.path.basename(shapefile).replace('.shp', '')
 
             values, training_point = train_point_handler(
-                shapefile, image_path, num_points)
+                shapefile, image_path, num_points=num_points,array_list=array_list,raster=raster)
             extracted_values.extend(values)
 
             lat.extend([point.x for point in training_point])
@@ -351,6 +355,58 @@ class AnalysisTool:
             pass
 
         del raster
+    
+    def supervised_classification_test(self,
+                                      train_data_path=None,
+                                      input_data=[],
+                                      method='RandomForest',
+                                      num_points=1000,
+                                      test_size=0.2,
+                                      params={}):
+        
+        if len(input_data)!=0:
+            input_data = input_data
+        else:
+            input_data= self.train_data_process(train_data_path, path_to_image,num_points)
+
+        data = input_data['extracted_values']
+        data = [spectrum for spectrum in data]
+        label = input_data['lulc_class']
+        label = [l for l in label]
+
+        X = np.array(data)
+        y = np.array(label)
+
+        X_train, X_test, y_train, y_test = train_test_split(X,
+                                                            y,
+                                                            test_size=0.2)
+
+        if method == 'RandomForest':
+            model = RandomForestClassifier(**params)
+        elif method == 'NeuralNetwork':
+            model = MLPClassifier(**params)
+        elif method == 'KNeighbors':
+            model = KNeighborsClassifier(**params)
+        elif method == 'GradientBoosting':
+            model = GradientBoostingClassifier(**params)
+        else:
+            print(
+                'The available methods are either RandomForest, NeuralNetwork, KNeighbors, or GradientBoosting.'
+            )
+
+        model.fit(X_train, y_train)
+
+        confusion_matrix = metrics.confusion_matrix(y_test,
+                                                    model.predict(X_test))
+        accuracy_train = metrics.accuracy_score(y_train, model.predict(X_train))
+        accuracy_test = metrics.accuracy_score(y_test, model.predict(X_test))
+        kappa = metrics.cohen_kappa_score(y_test, model.predict(X_test))
+
+        print(f'Confusion matrix is:')
+        print(confusion_matrix)
+        print(f'Accuracy on train {accuracy_train:.5f}')
+        print(f'Accuracy on test {accuracy_test:.5f}')
+        print(f'Kappa coefficient {kappa:.5f}')
 
     def supervised_classification(self,
                                   path_to_image,
@@ -608,7 +664,7 @@ class AnalysisTool:
                 opened.set_band_description(cnt,band_name)
                 cnt+=1
             opened.close()
-            
+    
     def reprojection_to_crs(self,path_to_image,dst_crs='EPSG:4326',remove=False):
         epsg='_crs_'+dst_crs.replace('EPSG:','')
         dst_path=path_to_image.replace(os.path.basename(path_to_image),'')
@@ -688,3 +744,8 @@ class AnalysisTool:
             dst.close()
             
         shutil.rmtree(dst_path+'/temp')
+        
+        if remove==True:
+            os.remove(path_to_target_image)
+        else:
+            pass
