@@ -644,9 +644,10 @@ class AnalysisTool:
         with rasterio.open(path_to_output+'/'+filename+'_clipped.tif','w',**out_meta) as opened:
             opened.write(out_image)
             
-    def combine_bands(self,path_to_folder,path_to_output,output_filename='combined'):
+    def combine_bands(self,path_to_folder,path_to_output,output_filename='combined',remove=True):
         files=glob(path_to_folder+'/*')
         ref=rasterio.open(files[0])
+        crs=ref.meta['crs']
         
         with rasterio.open(path_to_output+'/'+output_filename+'.tif',
                            'w',
@@ -654,7 +655,7 @@ class AnalysisTool:
                            width=ref.meta['width'],
                            height=ref.meta['height'],
                            count=len(files),
-                           crs='EPSG:4326',
+                           crs=crs,
                            transform=ref.transform,
                            dtype=ref.read(1).dtype) as opened:
             cnt=1
@@ -664,6 +665,12 @@ class AnalysisTool:
                 opened.set_band_description(cnt,band_name)
                 cnt+=1
             opened.close()
+        
+        if remove==True:
+            for file in files:
+                os.remove(file)
+        else:
+            pass
     
     def reprojection_to_crs(self,path_to_image,dst_crs='EPSG:4326',remove=False):
         epsg='_crs_'+dst_crs.replace('EPSG:','')
