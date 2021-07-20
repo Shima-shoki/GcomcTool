@@ -695,7 +695,7 @@ class AnalysisTool:
         else:
             pass
     
-   def align_raster(self,path_to_ref_image,path_to_target_image,remove=True,nodata=np.nan):
+    def align_raster(self,path_to_ref_image,path_to_target_image,remove=True,nodata=np.nan):
         with rasterio.open(path_to_ref_image) as ref:
             bounds=ref.bounds
             height=ref.meta["height"]
