@@ -704,7 +704,7 @@ class AnalysisTool:
             transform=ref.meta["transform"]
         
         bbox = box(bounds[0], bounds[1], bounds[2], bounds[3])
-        geo = gpd.GeoDataFrame({'geometry': bbox}, index=[0], crs=from_epsg(4326))
+        geo = gpd.GeoDataFrame({'geometry': bbox}, index=[0], crs=crs)
         geo = geo.to_crs(crs=crs)
         coords=[json.loads(geo.to_json())['features'][0]['geometry']]
         
