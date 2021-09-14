@@ -321,13 +321,20 @@ class GcomCpy:
         ftp = self.ftp
         target_products = self.target_products
         downloaded_products = []
+        date_list=[]
         for file in tqdm(target_products):
+            fileDate = os.path.splitext(os.path.basename(file))[0][7:15]
+            
+            print(fileDate)
+            
+            date_list.append(fileDate)
             product_name = file[-37:]
             downloaded_products.append(download_path + "/" + product_name)
             with open(download_path + "/" + product_name, "wb") as f:
                 ftp.retrbinary(f"RETR {file}", f.write)
 
         self.downloaded_products = downloaded_products
+        self.date_list=date_list
         ftp.close()
 
     def show_subdatasets(self, batch=True, path_to_product=None):
@@ -395,16 +402,19 @@ class GcomCpy:
             except:
                 time.sleep(3)
                 os.remove(file)
+                
+        date_list=self.date_list
 
-        date_list = []
-        for file in clippedfile_list:
-            fileDate = file[-46:-38]
-            date_list.append(fileDate)
+        #date_list = []
+        #for file in downloaded_products:
+            #fileDate = os.path.splitext(os.path.basename(file))[0][0:7]
+            #date_list.append(fileDate)
 
         date_list = list(set(date_list))
         self.date_list = date_list
 
         mosaic_images = self.mosaic_images
+        
 
         if clip == True:
             for date in date_list:
@@ -543,9 +553,9 @@ class GcomCpy:
     def combine_rsrf_tile(self,
                           output_folder_name='combined',
                           bands=[
-                               'Rs_VN01', 'Rs_VN02', 'Rs_VN03',
-                              'Rs_VN04', 'Rs_VN05', 'Rs_VN06', 'Rs_VN07',
-                              'Rs_VN08', 'Rs_VN10', 'Rs_VN11', 'Rs_SW03','Tb_TI01',
+                              'Rs_VN01', 'Rs_VN02', 'Rs_VN03', 'Rs_VN04',
+                              'Rs_VN05', 'Rs_VN06', 'Rs_VN07', 'Rs_VN08',
+                              'Rs_VN10', 'Rs_VN11', 'Rs_SW03', 'Tb_TI01',
                               'Tb_TI02'
                           ]):
         download_path = self.download_path
