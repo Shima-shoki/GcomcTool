@@ -1,4 +1,4 @@
-import os, shutil,math,warnings
+import os, shutil,math,warnings,time
 from glob import glob
 from tqdm import tqdm
 import json
@@ -92,11 +92,14 @@ class AnalysisTool:
                            shapefile_dir_path,
                            image_path=None,
                            num_points=1000,
+                           show_spectrum=False,
+                           band_order=[],
                            write_train_data=False,
-                           output_train_data_path=None,
-                           output_train_data_epsg=4326):
+                           output_train_data_path=None):
         
         raster = rasterio.open(image_path)
+        band_names=list(raster.descriptions)
+        output_train_data_epsg=raster.meta['crs']
         counts=raster.meta['count']
         array_list=[raster.read(i+1) for i in range(counts)]
         
@@ -137,11 +140,27 @@ class AnalysisTool:
                                       geometry=gpd.points_from_xy(
                                           output_df.Latitude,
                                           output_df.Longitude))
-        output_gdf.set_crs(epsg=4326, inplace=True)
+        output_gdf.set_crs(output_train_data_epsg, inplace=True)
+        
+        if show_spectrum==True:
+            fig,ax=plt.subplots(figsize=(20,10))
+            if len(band_order)==0:
+                spectrum_axis=band_names
+            else:
+                spectrum_axis=band_order
+            classes=set(extracted_data_gdf['lulc_name'])
+            for cla in classes:
+                extracted_data=extracted_data_gdf[extracted_data_gdf['lulc_name']==cla]
+                values=np.array(list(extracted_data['extracted_values']))
+                value_list=[]
+                for band in spectrum_axis:
+                    idx=band_names.index(band)
+                    mean_val=np.mean(values[:,idx:idx+1])
+                    value_list.append(mean_val)
+                ax.plot(spectrum_axis,value_list,label=cla)
+            ax.legend()
 
         if write_train_data == True:
-            output_gdf = output_gdf.to_crs(
-                {'init': f'epsg:{output_train_data_epsg}'})
             output_gdf.drop('extracted_values',
                             axis=1).to_file(output_train_data_path)
         else:
@@ -557,6 +576,7 @@ class AnalysisTool:
         if singleband == True:
             with rasterio.open(file_list[0]) as opened:
                 ref = opened
+                crs=opened.meta['crs']
                 shape = opened.read(1).shape
             opened_array_list = []
             for file in file_list:
@@ -579,7 +599,7 @@ class AnalysisTool:
                                width=output_array.shape[1],
                                height=output_array.shape[0],
                                count=1,
-                               crs='EPSG:4326',
+                               crs=crs,
                                transform=ref.transform,
                                dtype=output_array.dtype) as output:
                 output.write(output_array, 1)
@@ -615,7 +635,7 @@ class AnalysisTool:
                                width=shape[1],
                                height=shape[0],
                                count=count,
-                               crs='EPSG:4326',
+                               crs=crs,
                                transform=ref.transform,
                                dtype=output_array.dtype) as output:
                 for i in range(count):
@@ -644,23 +664,34 @@ class AnalysisTool:
         with rasterio.open(path_to_output+'/'+filename+'_clipped.tif','w',**out_meta) as opened:
             opened.write(out_image)
             
-    def combine_bands(self,path_to_folder,path_to_output,output_filename='combined',remove=True):
+    def combine_bands(self,path_to_folder,path_to_output,output_filename='combined',remove=True,dtype=None):
         files=glob(path_to_folder+'/*')
-        ref=rasterio.open(files[0])
-        crs=ref.meta['crs']
+        
+        with rasterio.open(files[0]) as ref:
+            crs=ref.meta['crs']
+            width=ref.meta['width']
+            height=ref.meta['height']
+            transform=ref.transform
+            if dtype==None:
+                dtype=ref.read(1).dtype
+            else:
+                pass
         
         with rasterio.open(path_to_output+'/'+output_filename+'.tif',
                            'w',
                            driver='GTiff',
-                           width=ref.meta['width'],
-                           height=ref.meta['height'],
+                           width=width,
+                           height=height,
                            count=len(files),
                            crs=crs,
-                           transform=ref.transform,
-                           dtype=ref.read(1).dtype) as opened:
+                           transform=transform,
+                           dtype=dtype) as opened:
             cnt=1
             for file in files:
-                opened.write(rasterio.open(file).read(1),cnt)
+                with rasterio.open(file) as src:
+                    output_raster=src.read(1)
+                    src.close()
+                opened.write(output_raster,cnt)
                 band_name=os.path.splitext(os.path.basename(file))[0]
                 opened.set_band_description(cnt,band_name)
                 cnt+=1
@@ -668,7 +699,12 @@ class AnalysisTool:
         
         if remove==True:
             for file in files:
-                os.remove(file)
+                try:
+                    os.remove(file)
+                except:
+                    time.sleep(3)
+                    os.remove(file)
+                    
         else:
             pass
     
@@ -709,7 +745,7 @@ class AnalysisTool:
             width=ref.meta["width"]
             crs=ref.meta["crs"]
             transform=ref.meta["transform"]
-        
+
         bbox = box(bounds[0], bounds[1], bounds[2], bounds[3])
         geo = gpd.GeoDataFrame({'geometry': bbox}, index=[0], crs=crs)
         geo = geo.to_crs(crs=crs)
@@ -739,7 +775,9 @@ class AnalysisTool:
         with rasterio.open(dst_path+'/temp'+f'/{filename}_clipped.tif') as src_clipped:
             clipped_resampled=src_clipped.read(out_shape=(height,width),resampling=Resampling.nearest)
         
-        with rasterio.open(dst_path+f'/{filename}_aligned.tif','w',driver='GTiff',
+        with rasterio.open(dst_path+f'/{filename}_aligned.tif',
+                           'w',
+                           driver='GTiff',
                            width=width,
                            height=height,
                            count=src_count,
