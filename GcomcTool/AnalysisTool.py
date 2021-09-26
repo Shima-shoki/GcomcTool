@@ -291,7 +291,7 @@ class AnalysisTool:
             self,
             path_to_image,
             output_path,
-            train_data_path=None,input_data=[],
+            input_data=[],
             method='GaussianMixture',
             n=30,
             num_points=1000,
@@ -303,12 +303,37 @@ class AnalysisTool:
         
         if len(input_data)!=0:
             input_data = input_data
+            data = input_data['extracted_values']
         else:
-            input_data= self.train_data_process(train_data_path, path_to_image,num_points)
+            values = []
+            raster = rasterio.open(path_to_image)
+            counts = raster.meta['count']
+            array_list=[raster.read(i+1) for i in range(counts)]
+            bounds = raster.bounds
+            xmin = bounds[0]
+            xmax = bounds[2]
+            ymin = bounds[1]
+            ymax = bounds[3]
             
-        data = input_data['extracted_values']
+            cnt=0
+            while len(values) < num_points:
+                x = np.random.uniform(xmin, xmax)
+                y = np.random.uniform(ymin, ymax)
+                val_list = []
+                for i in range(counts):
+                    array=array_list[i]
+                    val = array[raster.index(x, y)]
+                    val_list.append(val)
+                if np.isnan(val_list).any() == True:
+                    pass
+                else:
+                    values.append(val_list)
+            del raster
+            data=values
+            
         data = [spectrum for spectrum in data]
         X = np.array(data)
+        print(X.shape)
 
         if method == 'GaussianMixture':
             if params != None:
