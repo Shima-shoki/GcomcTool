@@ -552,30 +552,57 @@ class GcomCpy:
 
     def combine_rsrf_tile(self,
                           output_folder_name='combined',
-                          bands=[
+                          bands_250m=[
                               'Rs_VN01', 'Rs_VN02', 'Rs_VN03', 'Rs_VN04',
                               'Rs_VN05', 'Rs_VN06', 'Rs_VN07', 'Rs_VN08',
                               'Rs_VN10', 'Rs_VN11', 'Rs_SW03', 'Tb_TI01',
                               'Tb_TI02'
-                          ]):
+                          ],
+                         bands_1000m=[
+                             'Rs_VN09','Rs_SW01','Rs_SW02','Rs_SW04'
+                         ]):
         download_path = self.download_path
-        os.mkdir(download_path + '/temp')
+        os.mkdir(download_path + '/temp_250m')
         reproject_func = self.reproject_all
-        for band in bands:
+        align_raster=self.align_raster
+        date_list = self.date_list
+        
+        for band in bands_250m:
             print(f'Processing band {band}...')
             reproject_func(band,
-                           folder_name=f"temp/{band}",
+                           folder_name=f"temp_250m/{band}",
                            clip=True,
                            merge=True)
-
-        band = bands[0]
-        with rasterio.open(glob(download_path + f"/temp/{band}/*")[0]) as ref:
+        
+        band = bands_250m[0]
+        with rasterio.open(glob(download_path + f"/temp_250m/{band}/*")[0]) as ref:
             ref_array = ref.read(1)
             height = ref.shape[0]
             width = ref.shape[1]
             transform = ref.transform
-
-        date_list = self.date_list
+        
+        if len(bands_1000m)!=0:
+            os.mkdir(download_path + '/temp_1000m')
+            for band in bands_1000m:
+                os.mkdir(download_path + f'/temp_250m/{band}')
+                print(f'Processing band {band}...')
+                reproject_func(band,folder_name=f"temp_1000m/{band}",clip=True,merge=True)
+                
+            ref_image_path=glob(download_path + f"/temp_250m/{bands_250m[0]}/*")[0]
+            for band in bands_1000m:
+                for date in date_list:
+                    target_path=download_path + '/' +f"temp_1000m/{band}/{band}_{date}_mosaic.tif"
+                    align_raster(ref_image_path,target_path)
+                    shutil.move(download_path + '/' +f"temp_1000m/{band}/{band}_{date}_mosaic_aligned.tif",
+                               download_path + f'/temp_250m/{band}')
+                    os.rename(download_path + '/' +f"temp_250m/{band}/{band}_{date}_mosaic_aligned.tif",
+                             download_path + '/' +f"temp_250m/{band}/{band}_{date}_mosaic.tif")
+                    
+        else:
+            pass
+        
+        bands=bands_250m+bands_1000m
+        
         os.mkdir(download_path + '/' + output_folder_name)
         for date in date_list:
             with rasterio.open(download_path + '/' + output_folder_name + '/' +
@@ -592,14 +619,15 @@ class GcomCpy:
                 for sub_dataset in bands:
                     with rasterio.open(
                             download_path + '/' +
-                            f"temp/{sub_dataset}/{sub_dataset}_{date}_mosaic.tif"
+                            f"temp_250m/{sub_dataset}/{sub_dataset}_{date}_mosaic.tif"
                     ) as opened:
                         array = opened.read(1)
                     output.write(array, cnt)
                     output.set_band_description(cnt, sub_dataset)
                     cnt += 1
                 output.close()
-        shutil.rmtree(download_path + '/temp')
+        shutil.rmtree(download_path + '/temp_250m')
+        shutil.rmtree(download_path + '/temp_1000m')
 
     def clean_up(self):
         downloaded_products = self.downloaded_products
