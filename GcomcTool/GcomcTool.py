@@ -1122,7 +1122,64 @@ class GcomCpy:
     def num_bin_calculator(self, x, res, nrow):
         return np.round(2 * nrow * np.cos(
             (90 - ((x - 1) * (res) + (res) * (1 / 2))) * np.pi / 180))
+    
+    def align_raster(self,path_to_ref_image,path_to_target_image,remove=True,nodata=np.nan):
+        with rasterio.open(path_to_ref_image) as ref:
+            bounds=ref.bounds
+            height=ref.meta["height"]
+            width=ref.meta["width"]
+            crs=ref.meta["crs"]
+            transform=ref.meta["transform"]
 
+        bbox = box(bounds[0], bounds[1], bounds[2], bounds[3])
+        geo = gpd.GeoDataFrame({'geometry': bbox}, index=[0], crs=crs)
+        geo = geo.to_crs(crs=crs)
+        coords=[json.loads(geo.to_json())['features'][0]['geometry']]
+        
+        dst_path=path_to_target_image.replace(os.path.basename(path_to_target_image),'')
+        filename=os.path.splitext(os.path.basename(path_to_target_image))[0]
+        os.mkdir(dst_path+'/temp')
+        
+        with rasterio.open(path_to_target_image) as src:
+            out_img, out_transform = rasterio.mask.mask(src, coords, crop=True,filled=False,nodata=nodata)
+            src_crs=src.crs
+            src_count=src.count
+            dtype=out_img.dtype
+        
+        with rasterio.open(dst_path+'/temp'+f'/{filename}_clipped.tif','w',driver='GTiff',
+                           width=out_img.shape[2],
+                           height=out_img.shape[1],
+                           count=src_count,
+                           crs=src_crs,
+                           transform=out_transform,
+                           dtype=dtype) as output:
+            for i in range(src_count):
+                output.write(out_img[i],i+1)
+            output.close()
+        
+        with rasterio.open(dst_path+'/temp'+f'/{filename}_clipped.tif') as src_clipped:
+            clipped_resampled=src_clipped.read(out_shape=(height,width),resampling=Resampling.nearest)
+        
+        with rasterio.open(dst_path+f'/{filename}_aligned.tif',
+                           'w',
+                           driver='GTiff',
+                           width=width,
+                           height=height,
+                           count=src_count,
+                           crs=crs,
+                           transform=transform,
+                           dtype=dtype) as dst:
+            for i in range(src_count):
+                dst.write(clipped_resampled[i],i+1)
+            dst.close()
+            
+        shutil.rmtree(dst_path+'/temp')
+        
+        if remove==True:
+            os.remove(path_to_target_image)
+        else:
+            pass
+        
     def global_eqa_1dim(self, file_path, subdataset, output_path):
         opened_gdal = gdal.Open(file_path)
         error_dn = int(opened_gdal.GetMetadata()
@@ -1178,3 +1235,4 @@ class GcomCpy:
         img.save(output_path)
 
         del opened_gdal, opened
+       
