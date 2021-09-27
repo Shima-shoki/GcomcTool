@@ -558,9 +558,7 @@ class GcomCpy:
                               'Rs_VN10', 'Rs_VN11', 'Rs_SW03', 'Tb_TI01',
                               'Tb_TI02'
                           ],
-                         bands_1000m=[
-                             'Rs_VN09','Rs_SW01','Rs_SW02','Rs_SW04'
-                         ]):
+                         bands_1000m=[]):
         download_path = self.download_path
         os.mkdir(download_path + '/temp_250m')
         reproject_func = self.reproject_all
@@ -581,6 +579,7 @@ class GcomCpy:
             width = ref.shape[1]
             transform = ref.transform
         
+        
         if len(bands_1000m)!=0:
             os.mkdir(download_path + '/temp_1000m')
             for band in bands_1000m:
@@ -590,14 +589,17 @@ class GcomCpy:
                 
             ref_image_path=glob(download_path + f"/temp_250m/{bands_250m[0]}/*")[0]
             for band in bands_1000m:
-                for date in date_list:
+                for i in range(len(date_list)):
+                    date=date_list[i]
                     target_path=download_path + '/' +f"temp_1000m/{band}/{band}_{date}_mosaic.tif"
                     align_raster(ref_image_path,target_path)
+                    
+            for band in bands_1000m:
+                for i in range(len(date_list)):
                     shutil.move(download_path + '/' +f"temp_1000m/{band}/{band}_{date}_mosaic_aligned.tif",
                                download_path + f'/temp_250m/{band}')
                     os.rename(download_path + '/' +f"temp_250m/{band}/{band}_{date}_mosaic_aligned.tif",
                              download_path + '/' +f"temp_250m/{band}/{band}_{date}_mosaic.tif")
-                    
         else:
             pass
         
@@ -627,7 +629,11 @@ class GcomCpy:
                     cnt += 1
                 output.close()
         shutil.rmtree(download_path + '/temp_250m')
-        shutil.rmtree(download_path + '/temp_1000m')
+        if len(bands_1000m)!=0:
+            shutil.rmtree(download_path + '/temp_1000m')
+        else:
+            pass
+
 
     def clean_up(self):
         downloaded_products = self.downloaded_products
