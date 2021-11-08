@@ -195,7 +195,8 @@ class GcomCpy:
                              product_type="LAND",
                              statistics=True,
                              period="08D",
-                             version=2):
+                             version=2,
+                            resolution='Q'):
         tile_num_vv = self.tile_num_vv
         tile_num_hh = self.tile_num_hh
         tile_calculator = self.tile_calculator
@@ -234,7 +235,7 @@ class GcomCpy:
                     d = date[6:8]
                     try:
                         item = ftp.nlst(
-                            f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Statistics/{version}/{y}/{m}/*{date}{orbit}{period}*{tile}*"
+                            f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Statistics/{version}/{y}/{m}/*{date}{orbit}{period}*{tile}*{resolution}*"
                         )
                         print(item)
                         target_products.extend(item)
