@@ -235,7 +235,7 @@ class GcomCpy:
                     d = date[6:8]
                     try:
                         item = ftp.nlst(
-                            f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Statistics/{version}/{y}/{m}/*{date}{orbit}{period}*{tile}*{resolution}*"
+                            f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Statistics/{version}/{y}/{m}/*{date}{orbit}{period}*{tile}*{product_name}{resolution}*"
                         )
                         print(item)
                         target_products.extend(item)
