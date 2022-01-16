@@ -195,7 +195,7 @@ class GcomCpy:
                              product_type="LAND",
                              statistics=True,
                              period="08D",
-                             version=2,
+                             version=3,
                             resolution='Q'):
         tile_num_vv = self.tile_num_vv
         tile_num_hh = self.tile_num_hh
