@@ -83,7 +83,7 @@ class GcomCpy:
         lon = (lon0 + col * d) / r
         return lon, lat
 
-    def query_tiles(self, box_coordinates, focus=False, help=True):
+    def query_tiles(self, box_coordinates, focus=False, help=True,show_map=True):
         self.box_coordinates = box_coordinates
 
         image_extent_library = []
@@ -142,26 +142,32 @@ class GcomCpy:
 
         self.tile_num_vv = tile_num_vv
         self.tile_num_hh = tile_num_hh
-
-        fig, ax = plt.subplots(figsize=(15, 10))
-        queried_tiles.boundary.plot(ax=ax, color="black")
+        
+        if show_map==True:
+            fig, ax = plt.subplots(figsize=(15, 10))
+            queried_tiles.boundary.plot(ax=ax, color="black")
 
         world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
         idx = world.loc[world.intersects(roi)].index
         if len(idx) != 0:
             gcom_extent_country = world.loc[idx]
-            gcom_extent_country.plot(ax=ax)
+            if show_map==True:
+                gcom_extent_country.plot(ax=ax)
         else:
-            world.plot(ax=ax)
+            if show_map==True:
+                world.plot(ax=ax)
 
         x, y = roi.exterior.xy
-        ax.plot(x, y, color="red", label='The target area')
-        ax.legend()
+        
+        if show_map==True:
+            ax.plot(x, y, color="red", label='The target area')
+            ax.legend()
 
         if focus == True:
             bounds = queried_tiles.total_bounds
-            ax.set_xlim(bounds[0] - 3, bounds[2] + 3)
-            ax.set_ylim(bounds[1] - 3, bounds[3] + 3)
+            if show_map==True:
+                ax.set_xlim(bounds[0] - 3, bounds[2] + 3)
+                ax.set_ylim(bounds[1] - 3, bounds[3] + 3)
         else:
             pass
 
