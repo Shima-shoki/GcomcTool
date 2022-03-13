@@ -675,7 +675,8 @@ class GcomCpy:
         gcom_extent_country.plot(ax=ax)
         ax.legend()
 
-        if box_coordinates != None:
+        #if box_coordinates != None:
+        if len(box_coordinates) != 0:
 
             ul_lat, ul_lon = box_coordinates[3], box_coordinates[0]
             ur_lat, ur_lon = box_coordinates[3], box_coordinates[2]
@@ -888,7 +889,7 @@ class GcomCpy:
         path = self.outputPath
         src_image = rasterio.open(path)
 
-        if box_coordinates == None:
+        if len(box_coordinates) == 0:
             box_coordinates = list(src_image.bounds)
             bbox = box(box_coordinates[0], box_coordinates[1],
                        box_coordinates[2], box_coordinates[3])
