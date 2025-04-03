@@ -249,7 +249,7 @@ class GcomCpy:
                     m = date[4:6]
                     d = date[6:8]
                     try:
-                        sftp_path=f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Statistics/{version}/{y}/{m}'
+                        sftp_path=f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Statistics/{version}/{y}/{m}"
                         file_list=sftp.listdir(sftp_path)
                         pattern=[f'{date}{orbit}{period}',f'{tile}',f'{product_name}{resolution}']
                         item=[f for f in file_list if all([(r in f) for r in pattern])]
