@@ -347,7 +347,7 @@ class GcomCpy:
             date_list.append(fileDate)
             product_name = file[-37:]
             downloaded_products.append(download_path + "/" + product_name)
-            localpath=dwnlooad_path+'/'+product_name
+            localpath=download_path+'/'+product_name
             if not os.path.exists(localpath):
                 sftp.get(remotepath=self.sftp_path+'/'+file,localpath=localpath)
 
