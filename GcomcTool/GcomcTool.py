@@ -5,7 +5,7 @@ import warnings
 from datetime import datetime as dt
 from datetime import timedelta
 from glob import glob
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import h5py
 import json
 import pycrs
@@ -249,10 +249,12 @@ class GcomCpy:
                     m = date[4:6]
                     d = date[6:8]
                     try:
-                        sftp_path=f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Statistics/{version}/{y}/{m}"
-                        file_list=sftp.listdir(sftp_path)
-                        pattern=[f'{date}{orbit}{period}',f'{tile}',f'{product_name}{resolution}']
-                        item=[f for f in file_list if all([(r in f) for r in pattern])]
+                        sftp_path = f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Statistics/{version}/{y}/{m}"
+                        file_list = sftp.listdir(sftp_path)
+                        p0 = f'{date}{orbit}{period}'
+                        p1 = f'{tile}'
+                        p2 = f'{product_name}{resolution}'
+                        item = [f for f in file_list if p0 in f and p1 in f and p2 in f]
                         print(item)
                         target_products.extend(item)
                     except:
@@ -266,10 +268,14 @@ class GcomCpy:
                     y = date[:4]
                     m = date[4:6]
                     d = date[6:8]
-                    sftp_path=f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}/{version}/{y}/{m}/{d}"
-                    file_list=sftp.listdir(sftp_path)
-                    pattern=[f'{date}{orbit}{period}',f'{tile}',f'{product_name}{resolution}']
-                    item=[f for f in file_list if all([(r in f) for r in pattern])]
+                    sftp_path = f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Statistics/{version}/{y}/{m}/{d}"
+                    file_list = sftp.listdir(sftp_path)
+                    
+                    p0 = f'{date}{orbit}{period}'
+                    p1 = f'{tile}'
+                    p2 = f'{product_name}{resolution}'
+                    
+                    item = [f for f in file_list if p0 in f and p1 in f and p2 in f]
                     print(item)
                     target_products.extend(item)
 
@@ -353,7 +359,7 @@ class GcomCpy:
 
         self.downloaded_products = downloaded_products
         self.date_list=date_list
-        ftp.close()
+        self.sftp.close()
 
     def show_subdatasets(self, batch=True, path_to_product=None):
         if batch == True:
@@ -735,7 +741,6 @@ class GcomCpy:
 
         image_array = image_array.astype("float")
         image_array[image_array == 65535.0] = np.nan
-        image_array[image_array == 65534.0] = np.nan
         image_array = slope * image_array + offset
 
         dtype = gdal.GDT_Float32
