@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from tqdm import tqdm
 from ftplib import FTP
+import paramiko
 from osgeo import gdal, osr
 from rasterio.mask import mask
 from fiona.crs import from_epsg
@@ -83,7 +84,9 @@ class GcomCpy:
         lon = (lon0 + col * d) / r
         return lon, lat
 
-    def query_tiles(self, box_coordinates, focus=False, help=True,show_map=True):
+    def query_tiles(self, box_coordinates, focus=False, help=True,
+                    show_map=False #To be fixed
+                   ):
         self.box_coordinates = box_coordinates
 
         image_extent_library = []
@@ -147,15 +150,15 @@ class GcomCpy:
             fig, ax = plt.subplots(figsize=(15, 10))
             queried_tiles.boundary.plot(ax=ax, color="black")
 
-        world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
-        idx = world.loc[world.intersects(roi)].index
-        if len(idx) != 0:
-            gcom_extent_country = world.loc[idx]
-            if show_map==True:
-                gcom_extent_country.plot(ax=ax)
-        else:
-            if show_map==True:
-                world.plot(ax=ax)
+        #world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
+        #idx = world.loc[world.intersects(roi)].index
+        #if len(idx) != 0:
+        #    gcom_extent_country = world.loc[idx]
+        #    if show_map==True:
+        #        gcom_extent_country.plot(ax=ax)
+        #else:
+        #    if show_map==True:
+        #        world.plot(ax=ax)
 
         x, y = roi.exterior.xy
         
@@ -197,12 +200,14 @@ class GcomCpy:
                              date_start,
                              date_end,
                              user_name,
+                             password,
                              orbit="D",
                              product_type="LAND",
                              statistics=True,
                              period="08D",
                              version=3,
-                            resolution='Q'):
+                             resolution='Q',
+                            port=2051):
         tile_num_vv = self.tile_num_vv
         tile_num_hh = self.tile_num_hh
         tile_calculator = self.tile_calculator
@@ -224,8 +229,12 @@ class GcomCpy:
         m_end = date_end[5:7]
         d_end = date_end[8:10]
 
-        ftp = FTP('ftp.gportal.jaxa.jp', user_name, 'anonymous')
-        self.ftp = ftp
+        #ftp = FTP('ftp.gportal.jaxa.jp', user_name, 'anonymous')
+        #self.ftp = ftp
+        transport=paramiko.Transport('ftp.gportal.jaxa.jp')
+        transport.connect(username=user_name,password=password)
+        sftp=paramiko.SFTPClient.from_transport(transport)
+        self.sftp=sftp
 
         print('Filtering process has started...')
 
@@ -240,9 +249,10 @@ class GcomCpy:
                     m = date[4:6]
                     d = date[6:8]
                     try:
-                        item = ftp.nlst(
-                            f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Statistics/{version}/{y}/{m}/*{date}{orbit}{period}*{tile}*{product_name}{resolution}*"
-                        )
+                        sftp_path=f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}.Statistics/{version}/{y}/{m}'
+                        file_list=sftp.listdir(sftp_path)
+                        pattern=[f'{date}{orbit}{period}',f'{tile}',f'{product_name}{resolution}']
+                        item=[f for f in file_list if all([(r in f) for r in pattern])]
                         print(item)
                         target_products.extend(item)
                     except:
@@ -259,10 +269,15 @@ class GcomCpy:
                     item = ftp.nlst(
                         f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}/{version}/{y}/{m}/{d}/*{date}{orbit}*{tile}*{product_name}{resolution}*"
                     )
+                    sftp_path=f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}/{version}/{y}/{m}/{d}'
+                    file_list=sftp.listdir(sftp_path)
+                    pattern=[f'{date}{orbit}{period}',f'{tile}',f'{product_name}{resolution}']
+                    item=[f for f in file_list if all([(r in f) for r in pattern])]
                     print(item)
                     target_products.extend(item)
 
         self.target_products = target_products
+        self.sftp_path=sftp_path
 
     def filter_products_global(self,
                                product_name,
@@ -325,20 +340,19 @@ class GcomCpy:
     def get_products(self, download_path):
         self.download_path = download_path
 
-        ftp = self.ftp
+        sftp = self.sftp
         target_products = self.target_products
         downloaded_products = []
         date_list=[]
         for file in tqdm(target_products):
             fileDate = os.path.splitext(os.path.basename(file))[0][7:15]
-            
-            print(fileDate)
-            
+
             date_list.append(fileDate)
             product_name = file[-37:]
             downloaded_products.append(download_path + "/" + product_name)
-            with open(download_path + "/" + product_name, "wb") as f:
-                ftp.retrbinary(f"RETR {file}", f.write)
+            localpath=dwnlooad_path+'/'+product_name
+            if not os.path.exists(localpath):
+                sftp.get(remotepath=self.sftp_path+'/'+file,localpath=localpath)
 
         self.downloaded_products = downloaded_products
         self.date_list=date_list
