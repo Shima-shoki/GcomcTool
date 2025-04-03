@@ -231,7 +231,7 @@ class GcomCpy:
 
         #ftp = FTP('ftp.gportal.jaxa.jp', user_name, 'anonymous')
         #self.ftp = ftp
-        transport=paramiko.Transport('ftp.gportal.jaxa.jp')
+        transport=paramiko.Transport(('ftp.gportal.jaxa.jp',port))
         transport.connect(username=user_name,password=password)
         sftp=paramiko.SFTPClient.from_transport(transport)
         self.sftp=sftp
