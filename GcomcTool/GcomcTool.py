@@ -266,10 +266,7 @@ class GcomCpy:
                     y = date[:4]
                     m = date[4:6]
                     d = date[6:8]
-                    item = ftp.nlst(
-                        f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}/{version}/{y}/{m}/{d}/*{date}{orbit}*{tile}*{product_name}{resolution}*"
-                    )
-                    sftp_path=f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}/{version}/{y}/{m}/{d}'
+                    sftp_path=f"/standard/GCOM-C/GCOM-C.SGLI/L2.{product_type}.{product_name}/{version}/{y}/{m}/{d}"
                     file_list=sftp.listdir(sftp_path)
                     pattern=[f'{date}{orbit}{period}',f'{tile}',f'{product_name}{resolution}']
                     item=[f for f in file_list if all([(r in f) for r in pattern])]
